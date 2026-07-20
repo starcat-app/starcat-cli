@@ -7,7 +7,7 @@ toolchain go1.26.5
 
 require (
 	github.com/zalando/go-keyring v0.2.8
-	golang.org/x/mod v0.37.0
+	golang.org/x/mod v0.38.0
 )
 
 require (
