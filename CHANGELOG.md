@@ -6,6 +6,11 @@ The project follows Semantic Versioning. GitHub Releases are the source of publi
 
 ## Unreleased
 
+## v1.1.0 - 2026-07-29
+
+- Added `starcat search` as a stable JSON entry point for Alfred and other external launchers.
+- Added combined local and GitHub repository search with source labels and constrained open URLs.
+- Added stable machine-readable error codes for pairing, MCP availability, Pro access, upgrades, and search failures.
 - Removed the redundant machine-readable doctor output; automation uses structured MCP tools instead.
 - Removed the redundant note-input marker; `repo note set` now always reads content from stdin.
 
