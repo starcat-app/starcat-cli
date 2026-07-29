@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "errors": [
+    {
+      "code": "CLI_NOT_FOUND",
+      "source": "adapter",
+      "meaning": "The Starcat CLI executable cannot be located."
+    },
+    {
+      "code": "CLI_NOT_PAIRED",
+      "source": "cli",
+      "meaning": "The CLI has no usable Starcat pairing profile."
+    },
+    {
+      "code": "REQUIRES_PRO",
+      "source": "cli",
+      "meaning": "The current Starcat entitlement does not include external launcher integrations."
+    },
+    {
+      "code": "MCP_DISABLED",
+      "source": "cli",
+      "meaning": "The Starcat MCP service is disabled or unavailable."
+    },
+    {
+      "code": "UPGRADE_REQUIRED",
+      "source": "cli",
+      "meaning": "The installed App, CLI, tool, or schema version is incompatible."
+    },
+    {
+      "code": "SEARCH_TIMEOUT",
+      "source": "cli",
+      "meaning": "The repository search exceeded the launcher timeout."
+    },
+    {
+      "code": "SEARCH_FAILED",
+      "source": "cli",
+      "meaning": "The search failed for another normalized reason."
+    }
+  ]
+}

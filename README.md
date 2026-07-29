@@ -148,6 +148,11 @@ GitHub Search results, preserves source labels, and returns a safe `open_url`.
 The existing `starcat repo search` command remains local-only unless semantic
 search is explicitly requested.
 
+Launcher adapters should validate against the shared fixtures in
+[`contracts/global-search`](./contracts/global-search/README.md). This directory
+is the v1 contract source for schema compatibility, partial-provider warnings,
+empty results, and stable error codes.
+
 `help`, `version`, `pair`, `unpair`, `doctor`, `update`, and all `stats` commands use terminal-friendly output. They intentionally have no JSON-output flag because agents receive structured results through `starcat mcp`. Existing data commands such as `capabilities`, `repo`, and `tags` write JSON directly.
 
 Statistics are read-only local aggregates. `starcat stats` shows the common Star, knowledge-base, AI token, and RAG chunk counts; `stats ai` supports `--range`, `--feature`, `--provider`, and `--model`; `stats knowledge` shows source coverage and index health.

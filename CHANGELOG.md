@@ -6,6 +6,9 @@ The project follows Semantic Versioning. GitHub Releases are the source of publi
 
 ## Unreleased
 
+- Added versioned global-search contract fixtures for Alfred, uTools, Raycast,
+  and future launcher adapters.
+
 ## v1.1.0 - 2026-07-29
 
 - Added `starcat search` as a stable JSON entry point for Alfred and other external launchers.

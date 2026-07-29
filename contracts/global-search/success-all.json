@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "query": "local rag",
+  "returned_count": 2,
+  "items": [
+    {
+      "repo_id": 123,
+      "owner": "starcat-app",
+      "name": "starcat",
+      "full_name": "starcat-app/starcat",
+      "description": "A GitHub Stars knowledge base",
+      "language": "Swift",
+      "stars_count": 1200,
+      "is_private": false,
+      "is_starred": true,
+      "primary_source": "local",
+      "sources": [
+        "local",
+        "github"
+      ],
+      "icon_url": "https://github.com/starcat-app.png?size=80",
+      "open_url": "starcat://repo/starcat-app/starcat?v=1&rid=123",
+      "html_url": "https://github.com/starcat-app/starcat",
+      "updated_at": "2026-07-29T08:00:00Z"
+    },
+    {
+      "repo_id": 456,
+      "owner": "example",
+      "name": "remote-repo",
+      "full_name": "example/remote-repo",
+      "description": "A public repository returned by GitHub Search",
+      "language": "Go",
+      "stars_count": 980,
+      "is_private": false,
+      "is_starred": false,
+      "primary_source": "github",
+      "sources": [
+        "github"
+      ],
+      "icon_url": "https://avatars.githubusercontent.com/u/1?v=4",
+      "open_url": "https://github.com/example/remote-repo",
+      "html_url": "https://github.com/example/remote-repo",
+      "updated_at": "2026-07-28T06:00:00Z"
+    }
+  ],
+  "providers": {
+    "local": {
+      "status": "success",
+      "count": 1,
+      "message": null
+    },
+    "github": {
+      "status": "success",
+      "count": 2,
+      "message": null
+    }
+  },
+  "warnings": []
+}

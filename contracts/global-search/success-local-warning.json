@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "query": "offline",
+  "returned_count": 1,
+  "items": [
+    {
+      "repo_id": 789,
+      "owner": "private-owner",
+      "name": "local-only",
+      "full_name": "private-owner/local-only",
+      "description": null,
+      "language": null,
+      "stars_count": 0,
+      "is_private": true,
+      "is_starred": true,
+      "primary_source": "local",
+      "sources": [
+        "local"
+      ],
+      "icon_url": "https://github.com/private-owner.png?size=80",
+      "open_url": "starcat://repo/private-owner/local-only?v=1&rid=789",
+      "html_url": "https://github.com/private-owner/local-only",
+      "updated_at": null
+    }
+  ],
+  "providers": {
+    "local": {
+      "status": "success",
+      "count": 1,
+      "message": null
+    },
+    "github": {
+      "status": "failed",
+      "count": 0,
+      "message": "GitHub repository search is currently unavailable."
+    }
+  },
+  "warnings": [
+    "GitHub repository search is currently unavailable."
+  ]
+}

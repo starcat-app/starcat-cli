@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "query": "no matching repository",
+  "returned_count": 0,
+  "items": [],
+  "providers": {
+    "local": {
+      "status": "success",
+      "count": 0,
+      "message": null
+    },
+    "github": {
+      "status": "success",
+      "count": 0,
+      "message": null
+    }
+  },
+  "warnings": []
+}

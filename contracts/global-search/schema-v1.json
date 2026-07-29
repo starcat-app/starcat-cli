@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/starcat-app/starcat-cli/contracts/global-search/schema-v1.json",
+  "title": "Starcat Global Repository Search v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "query",
+    "returned_count",
+    "items",
+    "providers",
+    "warnings"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "query": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "returned_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 50
+    },
+    "items": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "$ref": "#/$defs/repository"
+      }
+    },
+    "providers": {
+      "$ref": "#/$defs/providers"
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "$defs": {
+    "nullableString": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "repository": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "repo_id",
+        "owner",
+        "name",
+        "full_name",
+        "description",
+        "language",
+        "stars_count",
+        "is_private",
+        "is_starred",
+        "primary_source",
+        "sources",
+        "icon_url",
+        "open_url",
+        "html_url",
+        "updated_at"
+      ],
+      "properties": {
+        "repo_id": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "full_name": {
+          "type": "string",
+          "minLength": 3
+        },
+        "description": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "language": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "stars_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "is_private": {
+          "type": "boolean"
+        },
+        "is_starred": {
+          "type": "boolean"
+        },
+        "primary_source": {
+          "enum": [
+            "local",
+            "github"
+          ]
+        },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "local",
+              "github"
+            ]
+          }
+        },
+        "icon_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "open_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "html_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "updated_at": {
+          "$ref": "#/$defs/nullableString"
+        }
+      }
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "status",
+        "count",
+        "message"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "success",
+            "failed"
+          ]
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "message": {
+          "$ref": "#/$defs/nullableString"
+        }
+      }
+    },
+    "providers": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "local",
+        "github"
+      ],
+      "properties": {
+        "local": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/provider"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "github": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/provider"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
