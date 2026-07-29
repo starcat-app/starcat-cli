@@ -134,12 +134,19 @@ starcat capabilities
 starcat stats
 starcat stats ai --range 30d
 starcat stats knowledge
+starcat search "local RAG" --source all --limit 30
 starcat repo search "local RAG" --scope starred --limit 20
 starcat repo context owner/repo
 starcat repo readme owner/repo
 starcat repo summary owner/repo
 starcat tags list
 ```
+
+`starcat search` is the stable JSON entry point for external launchers such as
+Alfred. It calls `starcat.global_search_repos`, merges Starcat local FTS and
+GitHub Search results, preserves source labels, and returns a safe `open_url`.
+The existing `starcat repo search` command remains local-only unless semantic
+search is explicitly requested.
 
 `help`, `version`, `pair`, `unpair`, `doctor`, `update`, and all `stats` commands use terminal-friendly output. They intentionally have no JSON-output flag because agents receive structured results through `starcat mcp`. Existing data commands such as `capabilities`, `repo`, and `tags` write JSON directly.
 

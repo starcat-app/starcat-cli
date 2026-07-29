@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -61,6 +62,53 @@ func TestClientInitializesAndCallsTool(t *testing.T) {
 	}
 	if !initialized {
 		t.Fatal("client did not send notifications/initialized")
+	}
+}
+
+func TestClientReturnsStructuredToolError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		var message map[string]any
+		if err := json.NewDecoder(request.Body).Decode(&message); err != nil {
+			t.Fatal(err)
+		}
+		switch message["method"] {
+		case "initialize":
+			writeResult(t, writer, message["id"], map[string]any{"protocolVersion": MCPProtocolVersion})
+		case "notifications/initialized":
+			writer.WriteHeader(http.StatusAccepted)
+		case "tools/call":
+			writeResult(t, writer, message["id"], map[string]any{
+				"content": []map[string]any{{
+					"type": "text",
+					"text": "wording may change",
+				}},
+				"structuredContent": map[string]any{
+					"schema_version": 1,
+					"code":           "UPGRADE_REQUIRED",
+					"message":        "wording may change",
+				},
+				"isError": true,
+			})
+		}
+	}))
+	defer server.Close()
+
+	profile := config.Profile{
+		Endpoint:        server.URL + "/mcp",
+		DeviceID:        "device-1",
+		ProtocolVersion: config.CurrentProtocolVersion,
+	}
+	transport, err := NewHTTPTransport(profile, "test-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = NewClient(transport).CallTool(context.Background(), "starcat.global_search_repos", map[string]any{})
+	var toolError *ToolError
+	if !errors.As(err, &toolError) {
+		t.Fatalf("CallTool() error = %v, want ToolError", err)
+	}
+	if toolError.Code != "UPGRADE_REQUIRED" || toolError.Message != "wording may change" {
+		t.Fatalf("ToolError = %#v", toolError)
 	}
 }
 

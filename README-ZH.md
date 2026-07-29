@@ -132,12 +132,18 @@ starcat capabilities
 starcat stats
 starcat stats ai --range 30d
 starcat stats knowledge
+starcat search "local RAG" --source all --limit 30
 starcat repo search "local RAG" --scope starred --limit 20
 starcat repo context owner/repo
 starcat repo readme owner/repo
 starcat repo summary owner/repo
 starcat tags list
 ```
+
+`starcat search` 是 Alfred 等外部启动器使用的稳定 JSON 入口。它调用
+`starcat.global_search_repos`，合并 Starcat 本地 FTS 与 GitHub Search，
+保留来源标识并返回经过约束的 `open_url`。现有 `starcat repo search`
+仍保持本地搜索语义，只有显式指定 `--semantic` 时才调用语义检索。
 
 `starcat stats`、`starcat stats ai`、`starcat stats knowledge` 使用适合终端阅读的输出，不提供额外的 JSON 输出参数。Agent 通过 `starcat mcp` 调用同一组统计工具，直接获得结构化结果。统计全部来自本地只读数据：概览覆盖 Star、知识库、AI Token 和 RAG 分片；AI 用量支持时间、功能、Provider、Model 筛选；知识库统计包含来源覆盖与索引健康度。
 

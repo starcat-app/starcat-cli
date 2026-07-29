@@ -98,6 +98,8 @@ func (r *Runner) Run(ctx context.Context, args []string) error {
 		return r.call(ctx, "starcat.get_capabilities", map[string]any{})
 	case "stats":
 		return r.runStats(ctx, args[1:])
+	case "search":
+		return r.runSearch(ctx, args[1:])
 	case "mcp":
 		if len(args) != 1 {
 			return errors.New("Usage: starcat mcp")
@@ -119,6 +121,84 @@ func (r *Runner) Run(ctx context.Context, args []string) error {
 	default:
 		return fmt.Errorf("unknown command %q; run `starcat help` for usage", args[0])
 	}
+}
+
+// runSearch 是 Alfred 等外部启动器使用的顶层全局搜索命令。
+// 现有 `repo search` 保持纯本地/语义语义，避免破坏 Agent 已依赖的网络边界。
+func (r *Runner) runSearch(ctx context.Context, args []string) error {
+	positionals, flags, err := parseFlags(args, map[string]bool{
+		"source": true,
+		"limit":  true,
+	})
+	if err != nil {
+		return err
+	}
+	if len(positionals) != 1 || strings.TrimSpace(positionals[0]) == "" {
+		return errors.New("Usage: starcat search <query> [--source all|local|github] [--limit N]")
+	}
+	limit, err := intFlag(flags, "limit", 30, 1, 50)
+	if err != nil {
+		return err
+	}
+	source := valueFlag(flags, "source", "all")
+	var sources []string
+	switch source {
+	case "all":
+		sources = []string{"local", "github"}
+	case "local", "github":
+		sources = []string{source}
+	default:
+		return errors.New("--source must be all, local, or github")
+	}
+	err = r.call(ctx, "starcat.global_search_repos", map[string]any{
+		"query":   positionals[0],
+		"limit":   limit,
+		"sources": sources,
+	})
+	if err != nil {
+		return classifyGlobalSearchError(err)
+	}
+	return nil
+}
+
+// codedCommandError 让 Alfred 等外部调用方依赖稳定 code，而不是解析英文错误全文。
+// 人类仍能在同一行看到原始说明，现有终端使用方式不受影响。
+type codedCommandError struct {
+	code    string
+	message string
+}
+
+func (e codedCommandError) Error() string {
+	return fmt.Sprintf("STARCAT_ERROR %s: %s", e.code, e.message)
+}
+
+func classifyGlobalSearchError(err error) error {
+	code := "SEARCH_FAILED"
+	var toolError *mcp.ToolError
+	switch {
+	case errors.Is(err, config.ErrNotPaired):
+		code = "CLI_NOT_PAIRED"
+	case errors.Is(err, mcp.ErrUnauthorized):
+		code = "CLI_NOT_PAIRED"
+	case errors.Is(err, context.DeadlineExceeded):
+		code = "SEARCH_TIMEOUT"
+	case errors.Is(err, mcp.ErrUnavailable):
+		code = "MCP_DISABLED"
+	case errors.As(err, &toolError):
+		switch toolError.Code {
+		case "REQUIRES_PRO":
+			code = "REQUIRES_PRO"
+		case "MCP_DISABLED":
+			code = "MCP_DISABLED"
+		case "UPGRADE_REQUIRED":
+			code = "UPGRADE_REQUIRED"
+		case "SEARCH_TIMEOUT":
+			code = "SEARCH_TIMEOUT"
+		case "SEARCH_FAILED", "INTERNAL_ERROR", "INVALID_ARGUMENTS":
+			code = "SEARCH_FAILED"
+		}
+	}
+	return codedCommandError{code: code, message: err.Error()}
 }
 
 func (r *Runner) runHelp(args []string) error {
@@ -651,6 +731,7 @@ MCP server:
   mcp                           Start the stdio MCP bridge
 
 Read commands:
+  search <query> [--source all|local|github] [--limit N]
   repo search <query> [--scope starred|knowledge|all] [--limit N] [--semantic]
   repo context <owner/name>
   repo readme <owner/name>
@@ -693,6 +774,13 @@ Usage:
 
 Statistics commands call Starcat MCP tools and render the structured result in
 a terminal-friendly format. Agents should use the same tools through starcat mcp.`,
+	"search": `Search Starcat and GitHub repositories
+
+Usage:
+  starcat search <query> [--source all|local|github] [--limit N]
+
+This command writes the stable global repository search contract as JSON.
+Local results open in Starcat; GitHub-only results open on GitHub.`,
 	"repo": `Read or update Starcat repositories
 
 Usage:

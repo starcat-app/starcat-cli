@@ -23,6 +23,30 @@ import (
 
 const MCPProtocolVersion = "2025-03-26"
 
+var (
+	// ErrUnavailable 表示 CLI 无法连接 MCP transport。调用方依赖这个类型分类，
+	// 不能再从底层英文网络错误中猜测 Service 状态。
+	ErrUnavailable = errors.New("Starcat MCP service is unavailable")
+	// ErrUnauthorized 表示已保存的设备凭据失效，需要重新配对。
+	ErrUnauthorized = errors.New("Starcat MCP device credential is unauthorized")
+)
+
+// ToolError 是 MCP `tools/call` 业务失败的机器可读结果。
+//
+// Code 来自 App 的 structuredContent，Message 仅供人类诊断；Launcher 必须只按
+// Code 分支，避免 App 文案调整破坏 CLI 行为。
+type ToolError struct {
+	Code    string
+	Message string
+}
+
+func (e *ToolError) Error() string {
+	if e.Message == "" {
+		return e.Code
+	}
+	return e.Message
+}
+
 // HTTPTransport 负责认证、证书 pinning 和 MCP HTTP 状态映射。
 type HTTPTransport struct {
 	endpoint string
@@ -86,7 +110,10 @@ func (t *HTTPTransport) Send(ctx context.Context, body []byte) (int, []byte, err
 
 	response, err := t.client.Do(request)
 	if err != nil {
-		return 0, nil, fmt.Errorf("connect to Starcat: %w", err)
+		if errors.Is(err, context.DeadlineExceeded) {
+			return 0, nil, fmt.Errorf("connect to Starcat: %w", err)
+		}
+		return 0, nil, fmt.Errorf("%w: %v", ErrUnavailable, err)
 	}
 	defer response.Body.Close()
 	data, err := io.ReadAll(io.LimitReader(response.Body, 16<<20))
@@ -94,7 +121,7 @@ func (t *HTTPTransport) Send(ctx context.Context, body []byte) (int, []byte, err
 		return response.StatusCode, nil, fmt.Errorf("read Starcat response: %w", err)
 	}
 	if response.StatusCode == http.StatusUnauthorized {
-		return response.StatusCode, nil, errors.New("device credential is no longer valid; pair the CLI again")
+		return response.StatusCode, nil, ErrUnauthorized
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return response.StatusCode, nil, fmt.Errorf("Starcat returned HTTP %d: %s", response.StatusCode, serverMessage(data))
@@ -169,7 +196,7 @@ func (c *Client) CallTool(ctx context.Context, name string, arguments map[string
 		return nil, err
 	}
 	if isError, _ := result["isError"].(bool); isError {
-		return nil, errors.New(toolErrorMessage(result))
+		return nil, toolError(result)
 	}
 	if structured, ok := result["structuredContent"]; ok {
 		return structured, nil
@@ -235,6 +262,17 @@ func serverMessage(data []byte) string {
 		}
 	}
 	return strings.TrimSpace(string(data))
+}
+
+func toolError(result map[string]any) error {
+	if structured, ok := result["structuredContent"].(map[string]any); ok {
+		code, _ := structured["code"].(string)
+		message, _ := structured["message"].(string)
+		if code != "" {
+			return &ToolError{Code: code, Message: message}
+		}
+	}
+	return &ToolError{Code: "MCP_TOOL_ERROR", Message: toolErrorMessage(result)}
 }
 
 func toolErrorMessage(result map[string]any) string {

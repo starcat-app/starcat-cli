@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/starcat-app/starcat-cli/internal/config"
+	"github.com/starcat-app/starcat-cli/internal/mcp"
 	"github.com/starcat-app/starcat-cli/internal/updater"
 )
 
@@ -118,6 +119,59 @@ func TestUnknownFlagsAreRejected(t *testing.T) {
 	}
 }
 
+func TestGlobalSearchMapsSourceAndLimitToMCP(t *testing.T) {
+	runner, calls, closeServer := newGlobalSearchRunner(t)
+	defer closeServer()
+	var stdout bytes.Buffer
+	runner.Stdout = &stdout
+
+	err := runner.Run(context.Background(), []string{
+		"search", "local RAG", "--source", "local", "--limit", "12",
+	})
+	if err != nil {
+		t.Fatalf("Run(search) error = %v", err)
+	}
+	if calls.query != "local RAG" || calls.limit != 12 {
+		t.Fatalf("search arguments = query %q, limit %d", calls.query, calls.limit)
+	}
+	if len(calls.sources) != 1 || calls.sources[0] != "local" {
+		t.Fatalf("search sources = %#v, want [local]", calls.sources)
+	}
+	if !strings.Contains(stdout.String(), `"schema_version": 1`) ||
+		!strings.Contains(stdout.String(), `"primary_source": "local"`) {
+		t.Fatalf("search stdout = %q, want global search JSON", stdout.String())
+	}
+}
+
+func TestGlobalSearchRejectsInvalidSourceBeforeConnecting(t *testing.T) {
+	runner := &Runner{Stdout: io.Discard}
+	err := runner.Run(context.Background(), []string{
+		"search", "swift", "--source", "web",
+	})
+	if err == nil || !strings.Contains(err.Error(), "--source must be all, local, or github") {
+		t.Fatalf("Run(search) error = %v, want source validation", err)
+	}
+}
+
+func TestGlobalSearchErrorsExposeStableCode(t *testing.T) {
+	testCases := []struct {
+		err  error
+		code string
+	}{
+		{err: config.ErrNotPaired, code: "CLI_NOT_PAIRED"},
+		{err: mcp.ErrUnauthorized, code: "CLI_NOT_PAIRED"},
+		{err: &mcp.ToolError{Code: "REQUIRES_PRO", Message: "wording may change"}, code: "REQUIRES_PRO"},
+		{err: mcp.ErrUnavailable, code: "MCP_DISABLED"},
+		{err: &mcp.ToolError{Code: "UPGRADE_REQUIRED", Message: "wording may change"}, code: "UPGRADE_REQUIRED"},
+	}
+	for _, testCase := range testCases {
+		classified := classifyGlobalSearchError(testCase.err)
+		if !strings.HasPrefix(classified.Error(), "STARCAT_ERROR "+testCase.code+":") {
+			t.Fatalf("classified error = %q, want code %s", classified, testCase.code)
+		}
+	}
+}
+
 func TestStatisticsCommandsRenderTerminalFriendlyOutput(t *testing.T) {
 	runner, closeServer := newStatisticsRunner(t)
 	defer closeServer()
@@ -219,6 +273,70 @@ type writeCalls struct {
 	upsertNote  int
 	noteContent string
 	noteDryRun  bool
+}
+
+type globalSearchCalls struct {
+	query   string
+	limit   int
+	sources []string
+}
+
+func newGlobalSearchRunner(t *testing.T) (*Runner, *globalSearchCalls, func()) {
+	t.Helper()
+	calls := &globalSearchCalls{}
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		var message map[string]any
+		if err := json.NewDecoder(request.Body).Decode(&message); err != nil {
+			http.Error(writer, err.Error(), http.StatusBadRequest)
+			return
+		}
+		switch message["method"] {
+		case "initialize":
+			writeMCPResult(writer, message["id"], map[string]any{"protocolVersion": "2025-03-26"})
+		case "notifications/initialized":
+			writer.WriteHeader(http.StatusAccepted)
+		case "tools/call":
+			params, _ := message["params"].(map[string]any)
+			tool, _ := params["name"].(string)
+			if tool != "starcat.global_search_repos" {
+				http.Error(writer, "unexpected tool: "+tool, http.StatusBadRequest)
+				return
+			}
+			arguments, _ := params["arguments"].(map[string]any)
+			calls.query, _ = arguments["query"].(string)
+			if value, ok := arguments["limit"].(float64); ok {
+				calls.limit = int(value)
+			}
+			for _, source := range arguments["sources"].([]any) {
+				calls.sources = append(calls.sources, source.(string))
+			}
+			writeMCPToolResult(writer, message["id"], map[string]any{
+				"schema_version": 1,
+				"query":          calls.query,
+				"returned_count": 1,
+				"items": []any{map[string]any{
+					"repo_id": 42, "owner": "openai", "name": "codex", "full_name": "openai/codex",
+					"stars_count": 100, "is_private": false, "is_starred": true,
+					"primary_source": "local", "sources": []any{"local"},
+					"icon_url": "https://github.com/openai.png?size=80",
+					"open_url": "starcat://repo/openai/codex?v=1&rid=42",
+					"html_url": "https://github.com/openai/codex",
+				}},
+				"providers": map[string]any{},
+				"warnings":  []any{},
+			})
+		default:
+			http.Error(writer, "unexpected MCP method", http.StatusBadRequest)
+		}
+	}))
+
+	profile := config.Profile{
+		Endpoint: server.URL + "/mcp", DeviceID: "device-1", ProtocolVersion: config.CurrentProtocolVersion,
+	}
+	return &Runner{
+		Profiles: staticProfileStore{profile: profile}, Credentials: staticCredentialStore{token: "test-token"},
+		Stdin: strings.NewReader(""), Stdout: io.Discard, Stderr: io.Discard,
+	}, calls, server.Close
 }
 
 func newStatisticsRunner(t *testing.T) (*Runner, func()) {
