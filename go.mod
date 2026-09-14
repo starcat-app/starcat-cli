@@ -1,13 +1,13 @@
 module github.com/starcat-app/starcat-cli
 
-go 1.25.0
+go 1.26.0
 
 // Release binaries must use a toolchain that contains the GO-2026-5856 crypto/tls fix.
 toolchain go1.26.5
 
 require (
 	github.com/zalando/go-keyring v0.2.8
-	golang.org/x/mod v0.37.0
+	golang.org/x/mod v0.41.0
 )
 
 require (
