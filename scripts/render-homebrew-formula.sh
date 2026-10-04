@@ -27,13 +27,12 @@ for checksum in "${darwin_arm64}" "${darwin_amd64}" "${linux_arm64}" "${linux_am
   fi
 done
 
-formula_version="${version#v}"
+# Homebrew infers the stable version from URLs; duplicating it fails strict audit.
 mkdir -p "$(dirname "${output}")"
 {
   echo 'class Starcat < Formula'
   echo '  desc "Cross-platform CLI and MCP bridge for Starcat"'
   echo '  homepage "https://github.com/starcat-app/starcat-cli"'
-  echo "  version \"${formula_version}\""
   echo '  license "MIT"'
   echo
   echo '  on_macos do'
