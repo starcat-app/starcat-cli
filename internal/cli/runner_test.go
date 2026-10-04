@@ -160,6 +160,7 @@ func TestGlobalSearchErrorsExposeStableCode(t *testing.T) {
 	}{
 		{err: config.ErrNotPaired, code: "CLI_NOT_PAIRED"},
 		{err: mcp.ErrUnauthorized, code: "CLI_NOT_PAIRED"},
+		{err: mcp.ErrCertificateMismatch, code: "CLI_NOT_PAIRED"},
 		{err: &mcp.ToolError{Code: "REQUIRES_PRO", Message: "wording may change"}, code: "REQUIRES_PRO"},
 		{err: mcp.ErrUnavailable, code: "MCP_DISABLED"},
 		{err: &mcp.ToolError{Code: "UPGRADE_REQUIRED", Message: "wording may change"}, code: "UPGRADE_REQUIRED"},

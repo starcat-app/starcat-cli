@@ -133,8 +133,15 @@ func (s Service) Pair(ctx context.Context, rawURI string) (config.Profile, error
 	if exchanged.DeviceID == "" || exchanged.Token == "" {
 		return config.Profile{}, errors.New("Starcat pairing response is missing the device credential")
 	}
+	// DNS 兜底成功后保存实际连接地址，避免 doctor 和 MCP 命令再次依赖坏域名。
+	// 只替换 authority；/mcp 路径和证书指纹仍来自已校验的 invitation。
+	endpoint, err := url.Parse(invitation.Endpoint)
+	if err != nil {
+		return config.Profile{}, err
+	}
+	endpoint.Host = response.Request.URL.Host
 	profile := config.Profile{
-		Endpoint:          invitation.Endpoint,
+		Endpoint:          endpoint.String(),
 		CertificateSHA256: invitation.Fingerprint,
 		DeviceID:          exchanged.DeviceID,
 		AppVersion:        exchanged.AppVersion,

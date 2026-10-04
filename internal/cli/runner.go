@@ -178,7 +178,7 @@ func classifyGlobalSearchError(err error) error {
 	switch {
 	case errors.Is(err, config.ErrNotPaired):
 		code = "CLI_NOT_PAIRED"
-	case errors.Is(err, mcp.ErrUnauthorized):
+	case errors.Is(err, mcp.ErrUnauthorized), errors.Is(err, mcp.ErrCertificateMismatch):
 		code = "CLI_NOT_PAIRED"
 	case errors.Is(err, context.DeadlineExceeded):
 		code = "SEARCH_TIMEOUT"
