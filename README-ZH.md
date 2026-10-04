@@ -161,7 +161,7 @@ Launcher 适配器统一使用
 
 ## 开发与贡献
 
-需要 Go 1.25 或更高版本。模块将 Release 构建工具链固定为 Go 1.26.5 或更高版本，确保发布产物包含当前标准库安全修复。开发、测试、安全边界和贡献要求分别见 [README.md](./README.md)、[SECURITY.md](./SECURITY.md) 与 [CONTRIBUTING.md](./CONTRIBUTING.md)。
+需要 Go 1.25 或更高版本。模块将 Release 构建工具链固定为 Go 1.26.6 或更高版本，确保发布产物包含当前标准库安全修复。开发、测试、安全边界和贡献要求分别见 [README.md](./README.md)、[SECURITY.md](./SECURITY.md) 与 [CONTRIBUTING.md](./CONTRIBUTING.md)。
 
 ## License
 

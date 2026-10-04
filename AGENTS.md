@@ -17,7 +17,7 @@ stdio MCP bridge。它把逐行 JSON-RPC 从 stdio 转发到 Starcat MCP
 Streamable HTTP，协议输出只能写 stdout，诊断只能写 stderr。
 
 - Go module：`github.com/starcat-app/starcat-cli`
-- Go directive 1.25.0；发布 toolchain 固定为 Go 1.26.5，以包含既定 TLS 安全修复
+- Go directive 1.25.0；发布 toolchain 固定为 Go 1.26.6，以包含既定标准库安全修复
 - 支持 macOS arm64/amd64、Linux arm64/amd64、Windows amd64
 - 系统凭据存储：macOS Keychain、Windows Credential Manager、Linux Secret Service
 

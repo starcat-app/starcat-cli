@@ -206,7 +206,7 @@ See [SECURITY.md](./SECURITY.md) for vulnerability reporting and threat-model de
 
 ## Development
 
-Requires Go 1.25 or newer. The module pins the release toolchain to Go 1.26.5 or newer so published binaries include the current standard-library security fixes.
+Requires Go 1.25 or newer. The module pins the release toolchain to Go 1.26.6 or newer so published binaries include the current standard-library security fixes.
 
 ```bash
 go mod verify
