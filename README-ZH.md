@@ -153,11 +153,42 @@ Launcher 适配器统一使用
 [`contracts/global-search`](./contracts/global-search/README.md) 中的 fixture
 验证兼容性。该目录是 v1 schema、Provider 部分失败、空结果和稳定错误码的契约真源。
 
-`starcat stats`、`starcat stats ai`、`starcat stats knowledge` 使用适合终端阅读的输出，不提供额外的 JSON 输出参数。Agent 通过 `starcat mcp` 调用同一组统计工具，直接获得结构化结果。统计全部来自本地只读数据：概览覆盖 Star、知识库、AI Token 和 RAG 分片；AI 用量支持时间、功能、Provider、Model 筛选；知识库统计包含来源覆盖与索引健康度。
+`starcat stats`、`starcat stats ai`、`starcat stats knowledge` 默认使用终端文本，均支持 `--json`。统计全部来自本地只读数据：概览覆盖 Star、知识库、AI Token 和 RAG 分片；AI 用量支持时间、功能、Provider、Model 筛选；知识库统计包含来源覆盖与索引健康度。
 
-`help`、`version`、`pair`、`unpair`、`doctor`、`update` 和全部 `stats` 命令只输出适合终端阅读的文本，不提供 JSON 输出参数；Agent 通过 `starcat mcp` 获取结构化结果。`capabilities`、`repo`、`tags` 等数据命令则直接输出 JSON。
+`help`、`version`、`pair`、`unpair`、`doctor`、`update` 输出终端文本；`capabilities`、`repo`、`tags`、`tools call`、`resources` 等数据入口输出结构化结果。
 
 写操作默认 dry-run，必须显式传 `--apply` 才会持久化。
+
+## 动态工具与资源
+
+普通 CLI 与 `starcat mcp` 使用 App 的同一公共目录。调用前先发现当前 App 实际支持的工具、Schema、权限与契约版本：
+
+```bash
+starcat tools list --json
+starcat tools describe starcat.get_repo
+printf '%s' '{"owner":"owner","name":"repo"}' | starcat tools call starcat.get_repo --input -
+starcat resources list
+starcat resources read starcat://capabilities
+starcat stats --json
+```
+
+`--input` 从文件或 stdin 接受单个 JSON 对象，上限 8 MiB。支持预览的工具只有传 `--apply` 才会发送 `dry_run=false`，输入中自带 `false` 不能绕过；无预览的副作用工具也要求 `--apply`。最终权限由 App 判断。
+
+扩展目录覆盖缓存健康度、安全评分、Release、通知、发现来源、限定范围的知识库证据、导出和显式 AI / 后台任务。按返回的任务 ID 查询，不因超时重放写入。完成结果保留一小时；App 重启或切换账号后不恢复。导出内容由 CLI 调用方写入本地文件，App 不打开调用方传入的路径。
+
+App server `0.6.0`、公共契约版本 `2` 将省略 `dry_run` 统一为预览。旧 MCP 工作流若依赖省略即执行，需要在预览和授权后明确传 `false`。迁移、错误与文件语义见[公共能力契约](docs/public-capabilities-contract.md)。
+
+## macOS Chrome 原生桥接
+
+按已安装扩展的实际 ID 安装用户级宿主：
+
+```bash
+starcat browser-host install --extension-id <chrome-extension-id>
+```
+
+安装器在用户目录写入 Chrome host manifest 和启动脚本。CLI 可执行文件升级或移动后重新执行安装。卸载时删除 `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/` 中的 `com.starcat.browser.json` 和 `com.starcat.browser.sh`。
+
+Chrome 可经 CLI 代理 Companion 请求和事件流，仍使用独立的浏览器设备凭据，不复用 MCP token。Native Messaging 使用带长度前缀的 JSON，与 MCP 按行 stdio 分开。发现仅探测保存地址及 `5051` / `5001`，任意自定义端口仍需手填；Safari 当前保留 background HTTP 通道。真实浏览器安装、签名与人工验收另行记录。
 
 ## 开发与贡献
 

@@ -157,7 +157,7 @@ Launcher adapters should validate against the shared fixtures in
 is the v1 contract source for schema compatibility, partial-provider warnings,
 empty results, and stable error codes.
 
-`help`, `version`, `pair`, `unpair`, `doctor`, `update`, and all `stats` commands use terminal-friendly output. They intentionally have no JSON-output flag because agents receive structured results through `starcat mcp`. Existing data commands such as `capabilities`, `repo`, and `tags` write JSON directly.
+`help`, `version`, `pair`, `unpair`, `doctor`, and `update` use terminal-friendly output. Statistics also support `--json`; `capabilities`, `repo`, `tags`, `tools call`, and `resources` provide structured output for shell-based agents.
 
 Statistics are read-only local aggregates. `starcat stats` shows the common Star, knowledge-base, AI token, and RAG chunk counts; `stats ai` supports `--range`, `--feature`, `--provider`, and `--model`; `stats knowledge` shows source coverage and index health.
 
@@ -170,9 +170,40 @@ starcat repo tags add owner/repo Swift macOS --apply
 starcat repo status set owner/repo using --apply
 ```
 
+## Dynamic tools and resources
+
+Both ordinary CLI commands and `starcat mcp` use the app's public registry. Discover the actual connected app's tools, schemas, permissions, and contract version before calling them:
+
+```bash
+starcat tools list --json
+starcat tools describe starcat.get_repo
+printf '%s' '{"owner":"owner","name":"repo"}' | starcat tools call starcat.get_repo --input -
+starcat resources list
+starcat resources read starcat://capabilities
+starcat stats --json
+```
+
+`--input` accepts one JSON object from a file or stdin, up to 8 MiB. For tools supporting preview, the CLI enforces `dry_run=true` unless `--apply` is present, even if the input contains `false`. Side-effecting tools without preview also require `--apply`. The app remains responsible for final authorization.
+
+The expanded registry includes cached health, security, releases, notifications, discovery sources, scoped knowledge evidence, exports, and explicit AI/background tasks. Follow returned task IDs instead of replaying timed-out writes. Task results expire after one hour and do not survive app restarts or account changes. Exported content belongs to the CLI caller and can be redirected to a local file; the app does not open caller-provided paths.
+
+App server `0.6.0`, public contract version `2`, defaults omitted `dry_run` to preview. MCP clients previously relying on omission to execute must now preview and explicitly send `false` after authorization. See [the public capability contract](docs/public-capabilities-contract.md) for migration and error semantics.
+
+## Chrome native bridge on macOS
+
+Install the user-level host for the exact installed extension ID:
+
+```bash
+starcat browser-host install --extension-id <chrome-extension-id>
+```
+
+The installer writes a Chrome host manifest and launcher under your user profile. Re-run it after moving or upgrading the CLI executable. To uninstall, remove `com.starcat.browser.json` and `com.starcat.browser.sh` from `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/`.
+
+Chrome can then proxy Companion requests and event streams through the CLI. Browser authorization remains an independent Companion device token; this does not reuse MCP credentials. The host uses length-prefixed native JSON, separately from MCP's line-delimited stdio. It probes the saved address and fixed ports `5051` / `5001`; arbitrary custom ports still need an address. Safari currently retains its background HTTP transport. Installing, signing, and accepting the extensions in real browsers remain separate verification steps.
+
 ## Updates
 
-The CLI checks GitHub Releases at most once every 24 hours and displays an English notice only in an interactive terminal. It never prints update notices in `starcat mcp` or automated pipelines.
+The CLI checks GitHub Releases at most once every 24 hours and displays an English notice only in an interactive terminal. It never prints update notices in `starcat mcp`, `browser-host`, or automated pipelines.
 
 Disable automatic checks:
 
