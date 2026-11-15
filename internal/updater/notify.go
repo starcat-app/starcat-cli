@@ -61,7 +61,7 @@ func skipNotification(args []string) bool {
 		return false
 	}
 	switch args[0] {
-	case "mcp", "update", "pair":
+	case "mcp", "browser-host", "update", "pair":
 		return true
 	default:
 		return false

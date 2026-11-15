@@ -102,6 +102,8 @@ func (r *Runner) Run(ctx context.Context, args []string) error {
 		return classifyCapabilityError(r.runTools(ctx, args[1:]))
 	case "resources":
 		return classifyCapabilityError(r.runResources(ctx, args[1:]))
+	case "browser-host":
+		return r.runBrowserHost(ctx, args[1:])
 	case "search":
 		return r.runSearch(ctx, args[1:])
 	case "mcp":
@@ -772,6 +774,7 @@ Capability discovery (JSON output):
   tools call <name> [--input FILE|-] [--apply]
   resources list [--json]
   resources read <uri>
+  browser-host install --extension-id <id>
 
 MCP server:
   mcp                           Start the stdio MCP bridge
@@ -825,6 +828,7 @@ Usage:
 
 Statistics commands call Starcat MCP tools and render the structured result in
 a terminal-friendly format. Use --json for structured CLI output.`,
+	"browser-host": browserHostUsage,
 	"tools": `Discover and call Starcat public capabilities
 
 Usage:
