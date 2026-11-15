@@ -125,7 +125,20 @@ type knowledgeBaseStatistics struct {
 
 // runStats calls the same MCP tools used by agents, then renders their structured results for people.
 func (r *Runner) runStats(ctx context.Context, args []string) error {
+	jsonOutput := false
+	filtered := make([]string, 0, len(args))
+	for _, argument := range args {
+		if argument == "--json" {
+			jsonOutput = true
+		} else {
+			filtered = append(filtered, argument)
+		}
+	}
+	args = filtered
 	if len(args) == 0 {
+		if jsonOutput {
+			return r.call(ctx, "starcat.get_overview_statistics", map[string]any{})
+		}
 		var value overviewStatistics
 		if err := r.callStatistics(ctx, "starcat.get_overview_statistics", map[string]any{}, &value); err != nil {
 			return err
@@ -158,6 +171,9 @@ func (r *Runner) runStats(ctx context.Context, args []string) error {
 		if value := valueFlag(flags, "model", ""); value != "" {
 			arguments["model"] = value
 		}
+		if jsonOutput {
+			return r.call(ctx, "starcat.get_ai_usage_statistics", arguments)
+		}
 		var value aiUsageStatistics
 		if err := r.callStatistics(ctx, "starcat.get_ai_usage_statistics", arguments, &value); err != nil {
 			return err
@@ -167,6 +183,9 @@ func (r *Runner) runStats(ctx context.Context, args []string) error {
 	case "knowledge":
 		if len(args) != 1 {
 			return errors.New("Usage: starcat stats knowledge")
+		}
+		if jsonOutput {
+			return r.call(ctx, "starcat.get_knowledge_base_statistics", map[string]any{})
 		}
 		var value knowledgeBaseStatistics
 		if err := r.callStatistics(ctx, "starcat.get_knowledge_base_statistics", map[string]any{}, &value); err != nil {

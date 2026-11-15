@@ -98,6 +98,10 @@ func (r *Runner) Run(ctx context.Context, args []string) error {
 		return r.call(ctx, "starcat.get_capabilities", map[string]any{})
 	case "stats":
 		return r.runStats(ctx, args[1:])
+	case "tools":
+		return classifyCapabilityError(r.runTools(ctx, args[1:]))
+	case "resources":
+		return classifyCapabilityError(r.runResources(ctx, args[1:]))
 	case "search":
 		return r.runSearch(ctx, args[1:])
 	case "mcp":
@@ -278,7 +282,7 @@ func (r *Runner) runRepo(ctx context.Context, args []string) error {
 			tool = "starcat.semantic_search"
 		}
 		return r.call(ctx, tool, map[string]any{"query": positionals[0], "scope": scope, "limit": limit})
-	case "context", "readme", "summary":
+	case "get", "context", "readme", "summary":
 		allowedFlags := map[string]bool{}
 		if args[0] == "summary" {
 			allowedFlags["generate"] = false
@@ -296,6 +300,7 @@ func (r *Runner) runRepo(ctx context.Context, args []string) error {
 			return err
 		}
 		tool := map[string]string{
+			"get":     "starcat.get_repo",
 			"context": "starcat.get_repo_context",
 			"readme":  "starcat.get_readme",
 			"summary": "starcat.get_repo_summary",
@@ -309,7 +314,41 @@ func (r *Runner) runRepo(ctx context.Context, args []string) error {
 		}
 		return r.call(ctx, tool, selector)
 	case "note":
+		if len(args) == 3 && args[1] == "get" {
+			selector, err := repoSelector(args[2])
+			if err != nil {
+				return err
+			}
+			return r.call(ctx, "starcat.get_repo_note", selector)
+		}
 		return r.runRepoNote(ctx, args[1:])
+	case "star", "unstar":
+		positionals, flags, err := parseFlags(args[1:], map[string]bool{"apply": false})
+		if err != nil {
+			return err
+		}
+		if len(positionals) != 1 {
+			return fmt.Errorf("Usage: starcat repo %s <owner/name> [--apply]", args[0])
+		}
+		selector, err := repoSelector(positionals[0])
+		if err != nil {
+			return err
+		}
+		selector["dry_run"] = !hasFlag(flags, "apply")
+		return r.callWrite(ctx, "starcat."+args[0]+"_repo", "github_star_writes", selector)
+	case "by-tag":
+		positionals, flags, err := parseFlags(args[1:], map[string]bool{"limit": true})
+		if err != nil {
+			return err
+		}
+		if len(positionals) != 1 {
+			return errors.New("Usage: starcat repo by-tag <tag> [--limit N]")
+		}
+		limit, err := intFlag(flags, "limit", 20, 1, 100)
+		if err != nil {
+			return err
+		}
+		return r.call(ctx, "starcat.list_repos_by_tag", map[string]any{"tag": positionals[0], "limit": limit})
 	case "status":
 		return r.runRepoStatus(ctx, args[1:])
 	case "tags":
@@ -727,6 +766,13 @@ Information:
   stats knowledge               Show detailed knowledge-base and chunk statistics
   version                       Print the CLI version
 
+Capability discovery (JSON output):
+  tools list [--json]
+  tools describe <name> [--json]
+  tools call <name> [--input FILE|-] [--apply]
+  resources list [--json]
+  resources read <uri>
+
 MCP server:
   mcp                           Start the stdio MCP bridge
 
@@ -734,6 +780,9 @@ Read commands:
   search <query> [--source all|local|github] [--limit N]
   repo search <query> [--scope starred|knowledge|all] [--limit N] [--semantic]
   repo context <owner/name>
+  repo get <owner/name>
+  repo note get <owner/name>
+  repo by-tag <tag> [--limit N]
   repo readme <owner/name>
   repo summary <owner/name> [--generate] [--allow-external-context]
   tags list
@@ -743,6 +792,8 @@ Write commands (dry-run by default; --apply persists changes):
   repo status set <owner/name> <unread|read|using> [--apply]
   repo tags <add|remove|replace> <owner/name> <tag...> [--apply]
   tag create <name> [--color HEX] [--icon SYMBOL] [--apply]
+  repo star <owner/name> [--apply]
+  repo unstar <owner/name> [--apply]
 
 Run "starcat help <command>" for command-specific help.`
 
@@ -768,12 +819,30 @@ Capabilities are always written as JSON.`,
 	"stats": `Show Starcat statistics
 
 Usage:
-  starcat stats
-  starcat stats ai [--range today|7d|30d|all] [--feature NAME] [--provider ID] [--model NAME]
-  starcat stats knowledge
+  starcat stats [--json]
+  starcat stats ai [--range today|7d|30d|all] [--feature NAME] [--provider ID] [--model NAME] [--json]
+  starcat stats knowledge [--json]
 
 Statistics commands call Starcat MCP tools and render the structured result in
-a terminal-friendly format. Agents should use the same tools through starcat mcp.`,
+a terminal-friendly format. Use --json for structured CLI output.`,
+	"tools": `Discover and call Starcat public capabilities
+
+Usage:
+  starcat tools list [--json]
+  starcat tools describe <name> [--json]
+  starcat tools call <name> [--input FILE|-] [--apply]
+
+Input is one JSON object (maximum 8 MiB); omitted input means {}.
+Writes with dry_run support default to preview even when input says dry_run=false.
+Other operations with side effects require --apply. App permissions are checked
+again on every call. New public tools appear without adding a CLI subcommand.`,
+	"resources": `Read Starcat public resources
+
+Usage:
+  starcat resources list [--json]
+  starcat resources read <uri>
+
+Results preserve the App URI, MIME type and text/blob content as JSON.`,
 	"search": `Search Starcat and GitHub repositories
 
 Usage:
@@ -786,11 +855,16 @@ Local results open in Starcat; GitHub-only results open on GitHub.`,
 Usage:
   starcat repo search <query> [--scope starred|knowledge|all] [--limit N] [--semantic]
   starcat repo context <owner/name>
+  starcat repo get <owner/name>
+  starcat repo note get <owner/name>
+  starcat repo by-tag <tag> [--limit N]
   starcat repo readme <owner/name>
   starcat repo summary <owner/name> [--generate] [--allow-external-context]
   starcat repo note set <owner/name> [--apply]
   starcat repo status set <owner/name> <unread|read|using> [--apply]
   starcat repo tags <add|remove|replace> <owner/name> <tag...> [--apply]
+  starcat repo star <owner/name> [--apply]
+  starcat repo unstar <owner/name> [--apply]
 
 Note content is always read from stdin.`,
 	"tags": `List Starcat tags

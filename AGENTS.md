@@ -49,6 +49,12 @@ git diff --check
 
 ## 项目特有约束
 
+- 新增或修改业务动作时主动评估公共暴露；复用 App `tools/list` 与
+  `starcat://capabilities`，不在 CLI 维护另一份领域目录。遵循
+  `docs/public-capabilities-contract.md`；同一工作区可查看主仓
+  `../../docs/5-规范/CLI与MCP能力暴露规范.md`。
+- 新能力至少可经 `tools call` 与 `mcp` 双入口使用；专用命令仅为高频便利入口。
+  变更时同步真实 help、输入 Schema、预览、错误与 Skill 校验；纯 UI 或暂缓须说明原因。
 - CLI 是 MCP 薄客户端：搜索、排序、去重、鉴权、授权与写入规则留在 Starcat App，
   禁止新增数据库直读或第二套业务实现。
 - `starcat mcp` 的 stdout 必须保持纯协议流；更新提示、日志和诊断不得污染 stdout。

@@ -220,21 +220,56 @@ func (c *Client) Initialize(ctx context.Context) error {
 }
 
 func (c *Client) ListTools(ctx context.Context) ([]map[string]any, error) {
+	return c.list(ctx, "tools/list", "tools")
+}
+
+// ListResources 保留 App 的 URI 与 MIME 元数据，不在 CLI 枚举本机文件。
+func (c *Client) ListResources(ctx context.Context) ([]map[string]any, error) {
+	return c.list(ctx, "resources/list", "resources")
+}
+
+// ReadResource 返回协议原始 contents，保留 text/blob、URI 和内容类型。
+func (c *Client) ReadResource(ctx context.Context, uri string) (map[string]any, error) {
 	if err := c.Initialize(ctx); err != nil {
 		return nil, err
 	}
-	result, err := c.request(ctx, "tools/list", map[string]any{})
-	if err != nil {
+	return c.request(ctx, "resources/read", map[string]any{"uri": uri})
+}
+
+// list 消费协议 cursor；目录增长时不能只返回第一页或无限重复同一页。
+func (c *Client) list(ctx context.Context, method, field string) ([]map[string]any, error) {
+	if err := c.Initialize(ctx); err != nil {
 		return nil, err
 	}
-	tools, _ := result["tools"].([]any)
-	out := make([]map[string]any, 0, len(tools))
-	for _, item := range tools {
-		if value, ok := item.(map[string]any); ok {
+	out := make([]map[string]any, 0)
+	params := map[string]any{}
+	seen := make(map[string]bool)
+	for {
+		result, err := c.request(ctx, method, params)
+		if err != nil {
+			return nil, err
+		}
+		items, ok := result[field].([]any)
+		if !ok {
+			return nil, fmt.Errorf("MCP %s response is missing %s", method, field)
+		}
+		for _, item := range items {
+			value, ok := item.(map[string]any)
+			if !ok {
+				return nil, fmt.Errorf("MCP %s returned an invalid descriptor", method)
+			}
 			out = append(out, value)
 		}
+		cursor, _ := result["nextCursor"].(string)
+		if cursor == "" {
+			return out, nil
+		}
+		if seen[cursor] {
+			return nil, fmt.Errorf("MCP %s repeated a pagination cursor", method)
+		}
+		seen[cursor] = true
+		params["cursor"] = cursor
 	}
-	return out, nil
 }
 
 func (c *Client) CallTool(ctx context.Context, name string, arguments map[string]any) (any, error) {
