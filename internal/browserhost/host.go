@@ -63,7 +63,8 @@ func (h Host) Serve(ctx context.Context, input io.Reader, output io.Writer, orig
 	case "discover":
 		candidates := []map[string]any{}
 		seen := map[string]bool{}
-		for _, base := range []string{request.ServiceURL, "http://127.0.0.1:5051", "http://127.0.0.1:5001"} {
+		// 只探测显式保存地址与 App 默认端口，不再内置旧插件端口兜底。
+		for _, base := range []string{request.ServiceURL, "http://127.0.0.1:5051"} {
 			if base == "" || seen[base] {
 				continue
 			}

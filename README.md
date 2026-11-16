@@ -199,7 +199,7 @@ starcat browser-host install --extension-id <chrome-extension-id>
 
 The installer writes a Chrome host manifest and launcher under your user profile. Re-run it after moving or upgrading the CLI executable. To uninstall, remove `com.starcat.browser.json` and `com.starcat.browser.sh` from `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/`.
 
-Chrome can then proxy Companion requests and event streams through the CLI. Browser authorization remains an independent Companion device token; this does not reuse MCP credentials. The host uses length-prefixed native JSON, separately from MCP's line-delimited stdio. It probes the saved address and fixed ports `5051` / `5001`; arbitrary custom ports still need an address. Safari currently retains its background HTTP transport. Installing, signing, and accepting the extensions in real browsers remain separate verification steps.
+Chrome can then proxy Companion requests and event streams through the CLI. Browser authorization remains an independent Companion device token; this does not reuse MCP credentials. The host uses length-prefixed native JSON, separately from MCP's line-delimited stdio. It probes the saved address and the single default loopback port `5051`; arbitrary custom ports still need an address. Safari currently retains its background HTTP transport. Installing, signing, and accepting the extensions in real browsers remain separate verification steps.
 
 ## Updates
 

@@ -188,7 +188,7 @@ starcat browser-host install --extension-id <chrome-extension-id>
 
 安装器在用户目录写入 Chrome host manifest 和启动脚本。CLI 可执行文件升级或移动后重新执行安装。卸载时删除 `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/` 中的 `com.starcat.browser.json` 和 `com.starcat.browser.sh`。
 
-Chrome 可经 CLI 代理 Companion 请求和事件流，仍使用独立的浏览器设备凭据，不复用 MCP token。Native Messaging 使用带长度前缀的 JSON，与 MCP 按行 stdio 分开。发现仅探测保存地址及 `5051` / `5001`，任意自定义端口仍需手填；Safari 当前保留 background HTTP 通道。真实浏览器安装、签名与人工验收另行记录。
+Chrome 可经 CLI 代理 Companion 请求和事件流，仍使用独立的浏览器设备凭据，不复用 MCP token。Native Messaging 使用带长度前缀的 JSON，与 MCP 按行 stdio 分开。发现仅探测保存地址及唯一默认 loopback 端口 `5051`，任意自定义端口仍需手填；Safari 当前保留 background HTTP 通道。真实浏览器安装、签名与人工验收另行记录。
 
 ## 开发与贡献
 

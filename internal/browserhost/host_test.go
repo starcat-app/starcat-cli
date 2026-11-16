@@ -11,11 +11,19 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
 
 const testOrigin = "chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/"
+
+// discoveryTransport 在进程内记录探测，避免测试触达用户正在运行的本地服务。
+type discoveryTransport func(*http.Request) (*http.Response, error)
+
+func (transport discoveryTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	return transport(request)
+}
 
 func invoke(t *testing.T, host Host, request Request) map[string]any {
 	t.Helper()
@@ -50,6 +58,48 @@ func TestProxyPreservesBodyOriginAndCredential(t *testing.T) {
 	result := invoke(t, Host{}, Request{Action: "request", ServiceURL: server.URL, Path: "/plugin/v1/notes", Method: "PATCH", Body: json.RawMessage(`{"content":"你好"}`), Token: strings.Join([]string{"fixture", "credential"}, "-")})
 	if result["ok"] != true || result["body"].(map[string]any)["saved"] != true {
 		t.Fatal(result)
+	}
+}
+
+// 默认配置只探测一个端口；保存的自定义地址保留，且与默认地址去重。
+func TestDiscoveryOnlyProbesSavedAddressAndDefault(t *testing.T) {
+	const defaultURL = "http://127.0.0.1:5051"
+	for _, test := range []struct {
+		name       string
+		serviceURL string
+		expected   []string
+	}{
+		{name: "default", expected: []string{defaultURL}},
+		{name: "saved default", serviceURL: defaultURL, expected: []string{defaultURL}},
+		{name: "saved custom", serviceURL: "http://127.0.0.1:5444", expected: []string{"http://127.0.0.1:5444", defaultURL}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var probed []string
+			host := Host{Client: &http.Client{Transport: discoveryTransport(func(request *http.Request) (*http.Response, error) {
+				probed = append(probed, request.URL.Scheme+"://"+request.URL.Host)
+				if request.Method != http.MethodGet || request.URL.Path != "/plugin/v1/discover" ||
+					request.Header.Get("Authorization") != "" ||
+					request.Header.Get("Origin") != strings.TrimSuffix(testOrigin, "/") {
+					t.Fatal("discovery request semantics changed")
+				}
+				body, err := json.Marshal(map[string]string{
+					"product": "starcat", "protocol_version": "1", "pairing": "numeric_comparison",
+					"instance_id": request.URL.Host, "channel": "appstore",
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(body))}, nil
+			})}}
+			result := invoke(t, host, Request{Action: "discover", ServiceURL: test.serviceURL})
+			if !reflect.DeepEqual(probed, test.expected) {
+				t.Fatalf("probed %v, want %v", probed, test.expected)
+			}
+			candidates := result["body"].(map[string]any)["candidates"].([]any)
+			if result["ok"] != true || len(candidates) != len(test.expected) {
+				t.Fatal(result)
+			}
+		})
 	}
 }
 
