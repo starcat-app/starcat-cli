@@ -172,11 +172,11 @@ starcat resources read starcat://capabilities
 starcat stats --json
 ```
 
-`--input` 从文件或 stdin 接受单个 JSON 对象，上限 8 MiB。支持预览的工具只有传 `--apply` 才会发送 `dry_run=false`，输入中自带 `false` 不能绕过；无预览的副作用工具也要求 `--apply`。最终权限由 App 判断。
+`--input` 从文件或 stdin 接受单个 JSON 对象，上限 8 MiB。通用调用保留输入中的 `dry_run`，省略时遵循 App 默认值。`--apply` 是 `dry_run=false` 的便利写法，与明确的 `true` 冲突时报错。业务逻辑与最终权限由 App 判断。
 
 扩展目录覆盖缓存健康度、安全评分、Release、通知、发现来源、限定范围的知识库证据、导出和显式 AI / 后台任务。按返回的任务 ID 查询，不因超时重放写入。完成结果保留一小时；App 重启或切换账号后不恢复。导出内容由 CLI 调用方写入本地文件，App 不打开调用方传入的路径。
 
-App server `0.6.0`、公共契约版本 `2` 将省略 `dry_run` 统一为预览。旧 MCP 工作流若依赖省略即执行，需要在预览和授权后明确传 `false`。迁移、错误与文件语义见[公共能力契约](docs/public-capabilities-contract.md)。
+App server `0.7.0`、公共契约版本 `3` 只有 `read` / `write`。读默认开放，包括笔记；写默认关闭，在设置 → 扩展与连接 → MCP 服务开启“允许写入”。刷新、生成、批量、删除及远端提交共用此开关。含 `dry_run` 的工具由 App 默认预览。迁移、错误与文件语义见[公共能力契约](docs/public-capabilities-contract.md)。
 
 ## macOS Chrome 原生桥接
 

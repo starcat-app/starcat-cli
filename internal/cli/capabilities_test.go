@@ -16,7 +16,7 @@ import (
 	"github.com/starcat-app/starcat-cli/internal/config"
 )
 
-func TestDynamicToolEnforcesPreviewAndApply(t *testing.T) {
+func TestDynamicToolPreservesExplicitExecution(t *testing.T) {
 	for _, apply := range []bool{false, true} {
 		t.Run(map[bool]string{false: "preview", true: "apply"}[apply], func(t *testing.T) {
 			runner, captured, cleanup := capabilityTestRunner(t, true, false)
@@ -31,7 +31,7 @@ func TestDynamicToolEnforcesPreviewAndApply(t *testing.T) {
 			}
 			captured.Lock()
 			defer captured.Unlock()
-			if len(captured.arguments) != 1 || captured.arguments[0]["dry_run"] != !apply {
+			if len(captured.arguments) != 1 || captured.arguments[0]["dry_run"] != false {
 				t.Fatalf("unexpected execution arguments: %#v", captured.arguments)
 			}
 			if captured.arguments[0]["content"] != "你好\n\"Starcat\"" {
@@ -44,17 +44,36 @@ func TestDynamicToolEnforcesPreviewAndApply(t *testing.T) {
 	}
 }
 
-func TestDynamicSideEffectWithoutPreviewRequiresApply(t *testing.T) {
+func TestDynamicSideEffectUsesAppContract(t *testing.T) {
 	runner, captured, cleanup := capabilityTestRunner(t, false, false)
 	defer cleanup()
 	err := runner.Run(context.Background(), []string{"tools", "call", "starcat.future_write"})
-	if err == nil || !strings.Contains(err.Error(), "EXECUTION_REQUIRED") {
+	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	captured.Lock()
 	defer captured.Unlock()
-	if len(captured.arguments) != 0 {
-		t.Fatal("an operation ran before explicit execution")
+	if len(captured.arguments) != 1 {
+		t.Fatal("explicit operation was not sent to the App")
+	}
+}
+
+// 显式预览不能被快捷标志覆盖；省略参数时也不替 App 写入默认值。
+func TestDynamicApplyDoesNotOverrideExplicitPreview(t *testing.T) {
+	schema := map[string]any{"properties": map[string]any{"dry_run": map[string]any{"type": "boolean"}}}
+	arguments := map[string]any{"dry_run": true}
+	if err := prepareExecution(nil, schema, arguments, true); err == nil {
+		t.Fatal("conflicting --apply was accepted")
+	}
+	if arguments["dry_run"] != true {
+		t.Fatal("explicit preview was overwritten")
+	}
+	arguments = map[string]any{}
+	if err := prepareExecution(nil, schema, arguments, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := arguments["dry_run"]; exists {
+		t.Fatal("App default was overridden")
 	}
 }
 

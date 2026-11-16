@@ -1,5 +1,5 @@
 // Package cli 提供 starcat 命令入口。
-// 命令只做参数校验与 MCP Tool 映射，写操作默认 dry-run，必须显式传 --apply。
+// 命令只做参数校验与 MCP Tool 映射；专用写命令默认预览，通用调用保留 App 参数语义。
 package cli
 
 import (
@@ -337,7 +337,7 @@ func (r *Runner) runRepo(ctx context.Context, args []string) error {
 			return err
 		}
 		selector["dry_run"] = !hasFlag(flags, "apply")
-		return r.callWrite(ctx, "starcat."+args[0]+"_repo", "github_star_writes", selector)
+		return r.callWrite(ctx, "starcat."+args[0]+"_repo", "write", selector)
 	case "by-tag":
 		positionals, flags, err := parseFlags(args[1:], map[string]bool{"limit": true})
 		if err != nil {
@@ -375,7 +375,7 @@ func (r *Runner) runRepoNote(ctx context.Context, args []string) error {
 
 	// 必须在读取 stdin 前预检权限，否则交互式终端会先无限等待正文，用户永远看不到
 	// Starcat 已关闭写入的明确提示。
-	client, err := r.writeClient(ctx, "local_writes")
+	client, err := r.writeClient(ctx, "write")
 	if err != nil {
 		return err
 	}
@@ -412,7 +412,7 @@ func (r *Runner) runRepoStatus(ctx context.Context, args []string) error {
 	}
 	selector["status"] = status
 	selector["dry_run"] = !hasFlag(flags, "apply")
-	return r.callWrite(ctx, "starcat.set_repo_status", "local_writes", selector)
+	return r.callWrite(ctx, "starcat.set_repo_status", "write", selector)
 }
 
 func (r *Runner) runRepoTags(ctx context.Context, args []string) error {
@@ -441,10 +441,7 @@ func (r *Runner) runRepoTags(ctx context.Context, args []string) error {
 	if action != "remove" {
 		selector["create_missing"] = true
 	}
-	capability := "local_writes"
-	if action == "replace" {
-		capability = "destructive_writes"
-	}
+	capability := "write"
 	return r.callWrite(ctx, tool, capability, selector)
 }
 
@@ -465,7 +462,7 @@ func (r *Runner) runTag(ctx context.Context, args []string) error {
 	if value := valueFlag(flags, "icon", ""); value != "" {
 		arguments["icon"] = value
 	}
-	return r.callWrite(ctx, "starcat.create_tag", "local_writes", arguments)
+	return r.callWrite(ctx, "starcat.create_tag", "write", arguments)
 }
 
 func (r *Runner) doctor(ctx context.Context) error {
@@ -566,14 +563,7 @@ func (r *Runner) writeClient(ctx context.Context, capability string) (*mcp.Clien
 	if enabled {
 		return client, nil
 	}
-	switch capability {
-	case "local_writes":
-		return nil, errors.New("local writes are disabled; open Starcat > Settings > MCP Service, enable Allow Local Writes, and try again")
-	case "destructive_writes":
-		return nil, errors.New("replace/delete writes are disabled; open Starcat > Settings > MCP Service, enable Allow Local Writes and Allow Replace/Delete Writes, then try again")
-	default:
-		return nil, fmt.Errorf("Starcat write capability %q is disabled", capability)
-	}
+	return nil, errors.New("writing is disabled; open Starcat > Settings > Extensions & Connections > MCP Service, enable Allow Writes, and try again")
 }
 
 func (r *Runner) loadClient() (*mcp.Client, error) {
@@ -837,9 +827,12 @@ Usage:
   starcat tools call <name> [--input FILE|-] [--apply]
 
 Input is one JSON object (maximum 8 MiB); omitted input means {}.
-Writes with dry_run support default to preview even when input says dry_run=false.
-Other operations with side effects require --apply. App permissions are checked
-again on every call. New public tools appear without adding a CLI subcommand.`,
+Explicit parameters are preserved; omitted parameters follow the App schema.
+For tools supporting dry_run, --apply sets it to false and conflicts with an
+explicit dry_run=true. Tools without preview support do not require --apply.
+Reads are enabled after pairing; enable writes in Starcat Settings.
+App permissions are checked on every call. New public tools appear without
+adding a CLI subcommand.`,
 	"resources": `Read Starcat public resources
 
 Usage:

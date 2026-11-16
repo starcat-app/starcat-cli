@@ -58,7 +58,8 @@ git diff --check
 - CLI 是 MCP 薄客户端：搜索、排序、去重、鉴权、授权与写入规则留在 Starcat App，
   禁止新增数据库直读或第二套业务实现。
 - `starcat mcp` 的 stdout 必须保持纯协议流；更新提示、日志和诊断不得污染 stdout。
-- 写操作默认 dry-run，只有显式 `--apply` 才能持久化；不得弱化该保护。
+- 公共授权只有 `read` / `write`：配对后默认可读（含笔记），写默认关闭，只能在 App 设置开启；禁止增加笔记、Star、批量或破坏性细分授权。
+- 专用写命令默认预览，`--apply` 执行。通用调用尊重 App Schema 和显式 `dry_run`；`--apply` 仅映射为 `false`，不能覆盖显式 `true`，也不能要求无预览工具额外预览。
 - `starcat search` 是 launcher 的稳定 JSON 入口。调整字段、错误码、部分来源 warning
   或 URL 语义时，必须同步 `contracts/global-search/` schema、fixtures 和测试。
 - Alfred、uTools、Raycast 只消费此 contract；不得为了单个适配器加入私有分叉格式。

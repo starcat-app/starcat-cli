@@ -24,7 +24,7 @@ func TestRepoNoteRejectsDisabledWritesBeforeReadingStdin(t *testing.T) {
 	defer closeServer()
 
 	err := runner.Run(context.Background(), []string{"repo", "note", "set", "toptal/gitignore.io"})
-	if err == nil || !strings.Contains(err.Error(), "enable Allow Local Writes") {
+	if err == nil || !strings.Contains(err.Error(), "enable Allow Writes") {
 		t.Fatalf("Run() error = %v, want local-write guidance", err)
 	}
 	if stdin.read {
@@ -35,13 +35,13 @@ func TestRepoNoteRejectsDisabledWritesBeforeReadingStdin(t *testing.T) {
 	}
 }
 
-func TestRepoTagReplaceExplainsDestructiveWriteSetting(t *testing.T) {
-	runner, calls, closeServer := newWriteRunner(t, strings.NewReader(""), true)
+func TestRepoTagReplaceUsesTheSameWritePermission(t *testing.T) {
+	runner, calls, closeServer := newWriteRunner(t, strings.NewReader(""), false)
 	defer closeServer()
 
 	err := runner.Run(context.Background(), []string{"repo", "tags", "replace", "toptal/gitignore.io", "agent"})
-	if err == nil || !strings.Contains(err.Error(), "enable Allow Local Writes and Allow Replace/Delete Writes") {
-		t.Fatalf("Run() error = %v, want destructive-write guidance", err)
+	if err == nil || !strings.Contains(err.Error(), "enable Allow Writes") {
+		t.Fatalf("Run() error = %v, want write guidance", err)
 	}
 	if calls.upsertNote != 0 {
 		t.Fatalf("unexpected write tool calls = %d", calls.upsertNote)
@@ -445,8 +445,8 @@ func newWriteRunner(t *testing.T, stdin io.Reader, localWrites bool) (*Runner, *
 			switch tool {
 			case "starcat.get_capabilities":
 				writeMCPToolResult(writer, message["id"], map[string]any{
-					"local_writes":       localWrites,
-					"destructive_writes": false,
+					"read":  true,
+					"write": localWrites,
 				})
 			case "starcat.upsert_repo_note":
 				calls.upsertNote++

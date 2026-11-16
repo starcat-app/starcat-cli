@@ -183,11 +183,11 @@ starcat resources read starcat://capabilities
 starcat stats --json
 ```
 
-`--input` accepts one JSON object from a file or stdin, up to 8 MiB. For tools supporting preview, the CLI enforces `dry_run=true` unless `--apply` is present, even if the input contains `false`. Side-effecting tools without preview also require `--apply`. The app remains responsible for final authorization.
+`--input` accepts one JSON object from a file or stdin, up to 8 MiB. Generic calls preserve an explicit `dry_run` value and otherwise use the App default. `--apply` is shorthand for `dry_run=false` and rejects a conflicting explicit preview. The App owns business logic and final authorization.
 
 The expanded registry includes cached health, security, releases, notifications, discovery sources, scoped knowledge evidence, exports, and explicit AI/background tasks. Follow returned task IDs instead of replaying timed-out writes. Task results expire after one hour and do not survive app restarts or account changes. Exported content belongs to the CLI caller and can be redirected to a local file; the app does not open caller-provided paths.
 
-App server `0.6.0`, public contract version `2`, defaults omitted `dry_run` to preview. MCP clients previously relying on omission to execute must now preview and explicitly send `false` after authorization. See [the public capability contract](docs/public-capabilities-contract.md) for migration and error semantics.
+App server `0.7.0`, public contract version `3`, exposes only `read` and `write` access. Reading, including notes, is enabled by default. Enable **Allow Writes** in Starcat Settings → Extensions & Connections → MCP Service for all mutations, refreshes, generation and task execution. Tools supporting `dry_run` default to preview in the App. See [the public capability contract](docs/public-capabilities-contract.md).
 
 ## Chrome native bridge on macOS
 

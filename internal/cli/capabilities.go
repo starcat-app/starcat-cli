@@ -111,18 +111,15 @@ func (r *Runner) readCapabilityInput(ctx context.Context, filename string) (map[
 	return arguments, nil
 }
 
-// prepareExecution 只把 App 的 readOnlyHint=true 当作读取声明。未知副作用必须显式执行，
-// dry_run 工具则强制与 --apply 一致，防止 JSON 参数绕过终端的预览保护。
+// prepareExecution 不覆盖调用方明确传入的参数；--apply 仅是 dry_run=false 的便利写法。
+// 默认值与写权限由 App 决定，使普通 CLI 和 MCP 的同参数调用语义一致。
 func prepareExecution(descriptor, schema, arguments map[string]any, apply bool) error {
 	properties, _ := schema["properties"].(map[string]any)
-	if _, supported := properties["dry_run"]; supported {
-		arguments["dry_run"] = !apply
-		return nil
-	}
-	annotations, _ := descriptor["annotations"].(map[string]any)
-	readOnly, _ := annotations["readOnlyHint"].(bool)
-	if !readOnly && !apply {
-		return &mcp.ToolError{Code: "EXECUTION_REQUIRED", Message: "this operation has side effects and no preview; review tools describe, then pass --apply"}
+	if _, supported := properties["dry_run"]; supported && apply {
+		if preview, exists := arguments["dry_run"]; exists && preview != false {
+			return &mcp.ToolError{Code: "INVALID_ARGUMENTS", Message: "--apply conflicts with dry_run; omit --apply for a preview"}
+		}
+		arguments["dry_run"] = false
 	}
 	return nil
 }
