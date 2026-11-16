@@ -40,12 +40,31 @@ go test -race ./...
 go vet ./...
 go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 bash -n scripts/*.sh
-go build -o bin/starcat ./cmd/starcat
+make build
+./bin/starcat version
 git diff --check
 ```
 
 修改平台相关代码时，还应验证 `CGO_ENABLED=0` 的五个目标组合；不要用一次本机构建
 代替跨平台检查。
+
+## 版本随改动持续升级（强制）
+
+- 以后凡修改 CLI 命令、参数、输出、MCP 桥接、浏览器宿主、连接行为或交付工具链，
+  AI 必须在同一任务主动检查并升级根目录 `VERSION`，不再等待 dong4j 提醒。
+  仅文档、注释或不影响行为的测试调整可不升级，但交付报告须说明。
+- 以一个完成并验证的功能或修复批次为单位升级；同批返工、每次编辑或编译不重复升级。
+  兼容修复升 patch，兼容新增能力升 minor，不兼容的公开接口变化升 major；
+  未发布开发迭代使用 `-dev.N`，同一目标版本的后续交付递增 N，不复用已交付编号。
+- `VERSION` 记录当前开发/交付版本；本地验证统一使用 `make build`，通过既有
+  `-ldflags` 注入 `internal/mcp.Version`。源码的 `dev` 仅保留为直接 `go build`
+  的兜底，禁止在 Go 文件、Makefile 或文档命令里再维护一份硬编码版本。
+- 升级后重新构建，核对 `./bin/starcat version` 与 `VERSION` 一致，并在任务
+  Checklist/交付报告记录前后版本、变更范围和验证结果。CLI 版本、App MCP server
+  版本与公共契约版本独立管理，不能相互替代。
+- 更新版本不等于发布授权。正式或预发布前将 `VERSION` 与目标 tag 对齐，产物仍由
+  tag 注入版本；Changelog 按独立授权同步，未获授权时在 Checklist 留待办。
+  不自动提交、打 tag、push、更新 Homebrew 或执行发布脚本。
 
 ## 项目特有约束
 

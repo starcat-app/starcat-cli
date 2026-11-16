@@ -244,16 +244,19 @@ go mod verify
 go test ./...
 go test -race ./...
 go vet ./...
-go build -o bin/starcat ./cmd/starcat
+make build
+./bin/starcat version
 ```
 
-Release builds inject a semantic version:
+`VERSION` tracks the current development or delivery version. `make build` injects
+it through `-ldflags`; a direct `go build` retains the `dev` fallback. Advance the
+version for each completed behavior change, using `-dev.N` for unpublished
+iterations. Version updates do not publish a release.
 
-```bash
-go build -ldflags "-X github.com/starcat-app/starcat-cli/internal/mcp.Version=v0.1.0" ./cmd/starcat
-```
-
-`scripts/build-all.sh v0.1.0` creates the five platform archives, installers, and `checksums.txt` under `dist/`. It does not create tags or publish a release.
+Release builds continue to inject the Git tag. Before publishing, align `VERSION`
+with that tag and follow [RELEASING.md](./RELEASING.md). The release build script
+creates five platform archives, installers, and `checksums.txt` under `dist/`;
+running it requires separate authorization.
 
 ## Contributing
 

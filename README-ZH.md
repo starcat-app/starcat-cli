@@ -192,7 +192,17 @@ Chrome 可经 CLI 代理 Companion 请求和事件流，仍使用独立的浏览
 
 ## 开发与贡献
 
-需要 Go 1.25 或更高版本。模块将 Release 构建工具链固定为 Go 1.26.10 或更高版本，确保发布产物包含当前标准库安全修复。开发、测试、安全边界和贡献要求分别见 [README.md](./README.md)、[SECURITY.md](./SECURITY.md) 与 [CONTRIBUTING.md](./CONTRIBUTING.md)。
+需要 Go 1.25 或更高版本。模块将 Release 构建工具链固定为 Go 1.26.11 或更高版本，确保发布产物包含当前标准库安全修复。开发、测试、安全边界和贡献要求分别见 [README.md](./README.md)、[SECURITY.md](./SECURITY.md) 与 [CONTRIBUTING.md](./CONTRIBUTING.md)。
+
+```bash
+make build
+./bin/starcat version
+```
+
+`VERSION` 记录当前开发或交付版本，`make build` 通过 `-ldflags` 注入；直接
+`go build` 仍以 `dev` 兜底。每个完成的行为变更批次主动升级，未发布迭代使用
+`-dev.N`。版本更新不代表已经发布；发布时将 `VERSION` 与目标 tag 对齐，
+按 [RELEASING.md](./RELEASING.md) 另行执行。
 
 ## License
 

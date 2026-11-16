@@ -7,13 +7,28 @@
 3. Add a fine-grained `HOMEBREW_TAP_TOKEN` Actions secret to `starcat-app/starcat-cli`. It only needs Contents read/write permission for `starcat-app/homebrew-starcat-cli`.
 4. Enable GitHub Actions and artifact attestations.
 
+## Development versions
+
+Keep the current development or delivery version in `VERSION`. Advance it for
+each completed behavior change: patch for compatible fixes, minor for compatible
+features, and major for incompatible public interfaces. Use `-dev.N` for
+unpublished iterations and increase N for subsequent deliveries of the same
+target version.
+
+`make build` injects `VERSION` into the local binary. The Go source keeps its `dev`
+fallback; release builds continue to inject the Git tag. Updating `VERSION` does
+not create a tag, publish binaries, or update Homebrew.
+
 ## Publish a release
 
-Update `CHANGELOG.md`, commit the release state, and create a semantic-version tag:
+After release authorization, set `VERSION` to the intended release tag, update
+`CHANGELOG.md`, verify `make build` and `./bin/starcat version`, commit the release
+state, and create the matching semantic-version tag:
 
 ```bash
-git tag -s v0.1.0 -m "Starcat CLI v0.1.0"
-git push origin v0.1.0
+release_version="$(cat VERSION)"
+git tag -s "${release_version}" -m "Starcat CLI ${release_version}"
+git push origin "${release_version}"
 ```
 
 The Release workflow verifies the code, creates five archives, generates checksums and provenance attestations, publishes the GitHub Release, and updates `Formula/starcat.rb` in the Homebrew tap.
