@@ -6,7 +6,12 @@ The project follows Semantic Versioning. GitHub Releases are the source of publi
 
 ## Unreleased
 
-- Security: Updated the release Go toolchain to 1.26.10 to include subsequent standard-library security fixes.
+## v2.0.0 - 2026-11-19
+
+- **Breaking:** Dedicated write commands preview changes by default and require `--apply` to persist them. Update scripts that expect these commands to write immediately.
+- Added `capabilities`, `tools list`, `tools call`, and `resources` commands to discover and use the connected Starcat app's public MCP tools and resources.
+- Added a Chrome native messaging host for Starcat Companion requests and event streams, with loopback discovery on port `5051`.
+- Security: Updated the release Go toolchain to 1.26.11 to include subsequent standard-library security fixes.
 
 ## v1.1.1 - 2026-10-04
 
