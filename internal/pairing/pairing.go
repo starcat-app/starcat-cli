@@ -25,12 +25,11 @@ import (
 
 // Invitation 是 Starcat 生成的短期连接资料。
 type Invitation struct {
-	Endpoint    string
-	Fingerprint string
-	Secret      string
+	Endpoint string
+	Secret   string
 }
 
-// ParseInvitation 严格限制 URI 结构，防止 Agent 把 token 发送到任意 endpoint。
+// ParseInvitation 解析当前版本由 Starcat 签发的 HTTP 配对邀请。
 func ParseInvitation(raw string) (Invitation, error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || u.Scheme != "starcat-pair" || u.Host != "connect" {
@@ -41,21 +40,21 @@ func ParseInvitation(raw string) (Invitation, error) {
 		return Invitation{}, errors.New("pairing URI protocol version is not supported")
 	}
 	invitation := Invitation{
-		Endpoint:    query.Get("endpoint"),
-		Fingerprint: query.Get("fingerprint"),
-		Secret:      query.Get("secret"),
+		Endpoint: query.Get("endpoint"),
+		Secret:   query.Get("secret"),
 	}
 	if len(invitation.Secret) < 32 {
 		return Invitation{}, errors.New("pairing URI contains an invalid one-time secret")
 	}
 	probe := config.Profile{
-		Endpoint:          invitation.Endpoint,
-		CertificateSHA256: invitation.Fingerprint,
-		DeviceID:          "pairing-probe",
-		ProtocolVersion:   config.CurrentProtocolVersion,
+		Endpoint:        invitation.Endpoint,
+		ProtocolVersion: config.CurrentProtocolVersion,
 	}
 	if err := probe.Validate(); err != nil {
 		return Invitation{}, err
+	}
+	if _, legacy := probe.HTTPVersion(); legacy {
+		return Invitation{}, errors.New("update Starcat and copy a new HTTP pairing command from MCP settings")
 	}
 	return invitation, nil
 }
@@ -105,10 +104,7 @@ func (s Service) Pair(ctx context.Context, rawURI string) (config.Profile, error
 	if err != nil {
 		return config.Profile{}, err
 	}
-	client, err := mcp.NewHTTPClient(invitation.Endpoint, invitation.Fingerprint, 2*time.Minute)
-	if err != nil {
-		return config.Profile{}, err
-	}
+	client := mcp.NewHTTPClient(2 * time.Minute)
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, exchangeURL, bytes.NewReader(payload))
 	if err != nil {
 		return config.Profile{}, err
@@ -133,20 +129,12 @@ func (s Service) Pair(ctx context.Context, rawURI string) (config.Profile, error
 	if exchanged.DeviceID == "" || exchanged.Token == "" {
 		return config.Profile{}, errors.New("Starcat pairing response is missing the device credential")
 	}
-	// DNS 兜底成功后保存实际连接地址，避免 doctor 和 MCP 命令再次依赖坏域名。
-	// 只替换 authority；/mcp 路径和证书指纹仍来自已校验的 invitation。
-	endpoint, err := url.Parse(invitation.Endpoint)
-	if err != nil {
-		return config.Profile{}, err
-	}
-	endpoint.Host = response.Request.URL.Host
 	profile := config.Profile{
-		Endpoint:          endpoint.String(),
-		CertificateSHA256: invitation.Fingerprint,
-		DeviceID:          exchanged.DeviceID,
-		AppVersion:        exchanged.AppVersion,
-		ProtocolVersion:   exchanged.ProtocolVersion,
-		PairedAt:          time.Now().UTC(),
+		Endpoint:        invitation.Endpoint,
+		DeviceID:        exchanged.DeviceID,
+		AppVersion:      exchanged.AppVersion,
+		ProtocolVersion: exchanged.ProtocolVersion,
+		PairedAt:        time.Now().UTC(),
 	}
 	if err := profile.Validate(); err != nil {
 		return config.Profile{}, err

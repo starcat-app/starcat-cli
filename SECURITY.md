@@ -15,7 +15,7 @@ Security fixes are provided for the latest published stable release. Users shoul
 - The Starcat app is the authority for authentication, entitlements, MCP permissions, and audit logging.
 - Pairing URIs are short-lived, single-use credentials and must be entered through stdin.
 - Long-lived device tokens are stored only in the operating-system credential store.
-- Plaintext MCP traffic is restricted to loopback; remote traffic requires TLS 1.3 and certificate fingerprint pinning.
+- The MCP service listens on loopback by default. **Allow Other Devices** extends the HTTP listener to the Mac's network interfaces.
 - Update archives are accepted only after SHA-256 verification against the same GitHub Release manifest.
 - Update checks contact GitHub Releases at most once per day and can be disabled with `STARCAT_NO_UPDATE_CHECK=1`.
 

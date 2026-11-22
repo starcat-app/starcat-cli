@@ -98,7 +98,7 @@ irm https://github.com/starcat-app/starcat-cli/releases/latest/download/install.
 
 ## 配对
 
-在 Starcat 的「设置 → MCP 服务」中启动服务，点击「复制配对命令」，把完整命令粘贴到目标设备的终端并按回车，然后回到 Starcat 确认设备：
+在 Starcat 的「设置 → 扩展与连接 → MCP」中启动服务。本机使用终端配对命令。若要连接其他设备，打开「允许其他设备连接」，复制「从其他设备配对」的命令。在对应设备上运行命令，再回到 Starcat 确认。
 
 ```bash
 starcat pair "starcat-pair://connect?..."
@@ -106,6 +106,8 @@ starcat doctor
 ```
 
 需要手工输入时，可运行 `starcat pair`，粘贴 URI 后直接按回车。配对命令五分钟内有效、只能兑换一次，并且仍需在 Starcat 中人工确认。长期设备凭据保存在 macOS Keychain、Windows Credential Manager 或 Linux Secret Service。
+
+CLI v3 使用 HTTP。跨设备连接时请同时升级 App 和 CLI。运行 `starcat doctor` 验证已有配对，CLI 会用原设备 Token 将保存的 HTTPS 地址迁移为 HTTP。主机或端口变更后，请复制新的配对命令。重启正在运行的 `starcat mcp` 进程以载入更新后的连接。
 
 ## 更新
 

@@ -108,7 +108,7 @@ Every installer reports platform detection, download, checksum verification, and
 
 ## Pair with Starcat
 
-In Starcat, open **Settings > MCP Service**, start the service, and click **Copy Pairing Command**. Paste the complete command into the target device's terminal and press Enter, then approve the device in Starcat:
+In Starcat, open **Settings > Extensions & Connections > MCP** and start the service. Copy the terminal pairing command for this Mac. To pair another device, enable **Allow Other Devices** and copy **Pair from Another Device**. Run the command on the selected device and approve it in Starcat.
 
 ```bash
 starcat pair "starcat-pair://connect?..."
@@ -116,6 +116,8 @@ starcat doctor
 ```
 
 For manual entry, run `starcat pair`, paste the URI, and press Enter. Pairing commands expire after five minutes, can only be redeemed once, and still require approval inside Starcat. Long-lived device credentials are stored in macOS Keychain, Windows Credential Manager, or Linux Secret Service.
+
+CLI v3 connects over HTTP. Upgrade the App and CLI together for remote connections. Run `starcat doctor` to verify an existing pairing and migrate a saved HTTPS address with its device token. If the host or port changed, copy a new pairing command. Restart any running `starcat mcp` process to load the updated connection.
 
 ## Configure an MCP client
 
@@ -226,8 +228,7 @@ brew upgrade starcat
 
 ## Security model
 
-- Plaintext HTTP is restricted to loopback addresses.
-- Remote connections require TLS 1.3 and the paired SHA-256 certificate fingerprint.
+- Starcat uses HTTP on `127.0.0.1` by default. **Allow Other Devices** also enables connections through the Mac's network addresses.
 - Each device receives an independent, revocable token.
 - Long-lived tokens are never written to command arguments, stdout, logs, or project files.
 - Downloaded update archives must match the SHA-256 release manifest.

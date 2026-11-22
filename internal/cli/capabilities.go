@@ -37,7 +37,7 @@ func (r *Runner) runTools(ctx context.Context, args []string) error {
 	if args[0] != "list" && args[0] != "describe" && args[0] != "call" {
 		return fmt.Errorf("unknown tools subcommand %q", args[0])
 	}
-	client, err := r.loadClient()
+	client, err := r.loadClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -135,7 +135,7 @@ func (r *Runner) runResources(ctx context.Context, args []string) error {
 	if (args[0] == "list" && len(positionals) != 0) || (args[0] == "read" && len(positionals) != 1) {
 		return errors.New("Usage: starcat resources list [--json] | read URI")
 	}
-	client, err := r.loadClient()
+	client, err := r.loadClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -169,8 +169,6 @@ func classifyCapabilityError(err error) error {
 		code = "CLI_NOT_PAIRED"
 	case errors.Is(err, mcp.ErrUnauthorized):
 		code = "UNAUTHORIZED"
-	case errors.Is(err, mcp.ErrCertificateMismatch):
-		code = "CERTIFICATE_MISMATCH"
 	case errors.Is(err, mcp.ErrUnavailable):
 		code = "MCP_UNAVAILABLE"
 	case errors.Is(err, context.DeadlineExceeded):

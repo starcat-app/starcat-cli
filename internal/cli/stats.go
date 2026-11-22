@@ -199,7 +199,7 @@ func (r *Runner) runStats(ctx context.Context, args []string) error {
 }
 
 func (r *Runner) callStatistics(ctx context.Context, tool string, arguments map[string]any, destination any) error {
-	client, err := r.loadClient()
+	client, err := r.loadClient(ctx)
 	if err != nil {
 		return err
 	}

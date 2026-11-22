@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -111,6 +112,113 @@ func TestDoctorUsesTerminalText(t *testing.T) {
 
 }
 
+func TestLegacyEndpointMigratesForDoctorAndStdio(t *testing.T) {
+	for _, command := range []string{"doctor", "mcp"} {
+		t.Run(command, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				if request.URL.Path != "/mcp" || request.Header.Get("Authorization") != "Bearer test-device" {
+					http.Error(writer, "unexpected endpoint or credential", http.StatusUnauthorized)
+					return
+				}
+				var message struct {
+					ID     int    `json:"id"`
+					Method string `json:"method"`
+					Params struct {
+						Name string `json:"name"`
+					} `json:"params"`
+				}
+				if err := json.NewDecoder(request.Body).Decode(&message); err != nil {
+					http.Error(writer, "invalid request", http.StatusBadRequest)
+					return
+				}
+				switch message.Method {
+				case "initialize":
+					writeMCPResult(writer, message.ID, map[string]any{"protocolVersion": mcp.MCPProtocolVersion})
+				case "notifications/initialized":
+					writer.WriteHeader(http.StatusAccepted)
+				case "tools/call":
+					if message.Params.Name != "starcat.get_capabilities" {
+						t.Errorf("unexpected tool: %s", message.Params.Name)
+						writer.WriteHeader(http.StatusBadRequest)
+						return
+					}
+					writeMCPToolResult(writer, message.ID, map[string]any{"read": true, "write": false})
+				case "tools/list":
+					writeMCPResult(writer, message.ID, map[string]any{"tools": []any{}})
+				default:
+					t.Errorf("unexpected MCP method: %s", message.Method)
+					writer.WriteHeader(http.StatusBadRequest)
+				}
+			}))
+			defer server.Close()
+
+			profiles := config.FileStore{Path: filepath.Join(t.TempDir(), "profile.json")}
+			httpEndpoint := server.URL + "/mcp"
+			legacy := config.Profile{
+				Endpoint:        strings.Replace(httpEndpoint, "http://", "https://", 1),
+				DeviceID:        "device-1",
+				AppVersion:      "2.0.0",
+				ProtocolVersion: config.CurrentProtocolVersion,
+				PairedAt:        time.Unix(1700000000, 0).UTC(),
+			}
+			if err := profiles.Save(legacy); err != nil {
+				t.Fatal(err)
+			}
+			var stdout bytes.Buffer
+			runner := &Runner{
+				Profiles: profiles, Credentials: staticCredentialStore{token: "test-device"},
+				Stdin:  strings.NewReader(`{"jsonrpc":"2.0","id":42,"method":"initialize","params":{}}` + "\n"),
+				Stdout: &stdout, Stderr: io.Discard,
+			}
+			if err := runner.Run(context.Background(), []string{command}); err != nil {
+				t.Fatalf("Run(%s) error = %v", command, err)
+			}
+			saved, err := profiles.Load()
+			legacy.Endpoint = httpEndpoint
+			if err != nil || saved != legacy {
+				t.Fatalf("migrated profile = %#v, %v, want %#v", saved, err, legacy)
+			}
+			if command == "doctor" && !strings.Contains(stdout.String(), "Endpoint: "+httpEndpoint) {
+				t.Fatalf("doctor still shows a legacy endpoint: %s", stdout.String())
+			}
+			if command == "mcp" {
+				var reply struct {
+					ID int `json:"id"`
+				}
+				if err := json.Unmarshal(stdout.Bytes(), &reply); err != nil || reply.ID != 42 {
+					t.Fatalf("MCP stdout = %q, want only the bridge response", stdout.String())
+				}
+			}
+		})
+	}
+}
+
+func TestLegacyEndpointPreservedWhenExistingCredentialIsRejected(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer server.Close()
+	profiles := config.FileStore{Path: filepath.Join(t.TempDir(), "profile.json")}
+	legacy := config.Profile{
+		Endpoint:        strings.Replace(server.URL, "http://", "https://", 1) + "/mcp",
+		DeviceID:        "device-1",
+		ProtocolVersion: config.CurrentProtocolVersion,
+	}
+	if err := profiles.Save(legacy); err != nil {
+		t.Fatal(err)
+	}
+	runner := &Runner{
+		Profiles: profiles, Credentials: staticCredentialStore{token: "test-device"},
+		Stdout: io.Discard, Stderr: io.Discard,
+	}
+	if err := runner.Run(context.Background(), []string{"doctor"}); !errors.Is(err, mcp.ErrUnauthorized) {
+		t.Fatalf("Run(doctor) error = %v, want unauthorized", err)
+	}
+	if saved, err := profiles.Load(); err != nil || saved != legacy {
+		t.Fatalf("failed probe changed original profile: %#v, %v", saved, err)
+	}
+}
+
 func TestUnknownFlagsAreRejected(t *testing.T) {
 	runner := &Runner{Stdout: io.Discard}
 	err := runner.Run(context.Background(), []string{"repo", "search", "swift", "--semnatic"})
@@ -160,7 +268,6 @@ func TestGlobalSearchErrorsExposeStableCode(t *testing.T) {
 	}{
 		{err: config.ErrNotPaired, code: "CLI_NOT_PAIRED"},
 		{err: mcp.ErrUnauthorized, code: "CLI_NOT_PAIRED"},
-		{err: mcp.ErrCertificateMismatch, code: "CLI_NOT_PAIRED"},
 		{err: &mcp.ToolError{Code: "REQUIRES_PRO", Message: "wording may change"}, code: "REQUIRES_PRO"},
 		{err: mcp.ErrUnavailable, code: "MCP_DISABLED"},
 		{err: &mcp.ToolError{Code: "UPGRADE_REQUIRED", Message: "wording may change"}, code: "UPGRADE_REQUIRED"},

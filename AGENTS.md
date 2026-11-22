@@ -82,7 +82,7 @@ git diff --check
 - `starcat search` 是 launcher 的稳定 JSON 入口。调整字段、错误码、部分来源 warning
   或 URL 语义时，必须同步 `contracts/global-search/` schema、fixtures 和测试。
 - Alfred、uTools、Raycast 只消费此 contract；不得为了单个适配器加入私有分叉格式。
-- 明文 HTTP 只允许 loopback；远程连接必须保持 TLS 1.3、证书指纹绑定和独立可撤销设备 token。
+- 本机和跨设备配对都使用 HTTP 和独立可撤销设备 token。CLI 在只读验证成功后迁移旧 HTTPS profile。
 - 长期 token 不得进入命令参数、stdout、日志或项目文件。
 - `scripts/build-all.sh` 只生成 `dist/` 资产与 `checksums.txt`；稳定 tag 会触发
   GitHub Release，并自动渲染、提交 `homebrew-starcat-cli` Formula。

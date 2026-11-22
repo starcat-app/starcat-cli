@@ -5,16 +5,11 @@ package mcp
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"crypto/tls"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -30,8 +25,6 @@ var (
 	ErrUnavailable = errors.New("Starcat MCP service is unavailable")
 	// ErrUnauthorized 表示已保存的设备凭据失效，需要重新配对。
 	ErrUnauthorized = errors.New("Starcat MCP device credential is unauthorized")
-	// ErrCertificateMismatch 表示服务身份与配对记录不同；不能当作断网或自动更新信任。
-	ErrCertificateMismatch = errors.New("Starcat TLS certificate fingerprint mismatch")
 )
 
 // ToolError 是 MCP `tools/call` 业务失败的机器可读结果。
@@ -50,98 +43,34 @@ func (e *ToolError) Error() string {
 	return e.Message
 }
 
-// HTTPTransport 负责认证、证书 pinning 和 MCP HTTP 状态映射。
+// HTTPTransport 负责认证和 MCP HTTP 状态映射。
 type HTTPTransport struct {
 	endpoint string
 	token    string
 	client   *http.Client
 }
 
-// NewHTTPClient 创建只信任配对证书指纹的 HTTPS client。
-// InsecureSkipVerify 仅用于关闭系统 CA 验证，真正的信任判断在 VerifyConnection 中完成。
-func NewHTTPClient(endpoint, fingerprint string, timeout time.Duration) (*http.Client, error) {
-	u, err := url.Parse(endpoint)
-	if err != nil {
-		return nil, err
-	}
+// NewHTTPClient 直接访问配对端点，避免本机或局域网流量被系统代理或重定向改道。
+func NewHTTPClient(timeout time.Duration) *http.Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
-	if u.Scheme == "https" {
-		expected := normalizeFingerprint(fingerprint)
-		if len(expected) != 64 {
-			return nil, errors.New("HTTPS connection requires a valid certificate fingerprint")
-		}
-		transport.TLSClientConfig = &tls.Config{
-			MinVersion:         tls.VersionTLS13,
-			InsecureSkipVerify: true, // #nosec G402 -- 下方强制进行 SHA-256 pinning。
-			VerifyConnection: func(state tls.ConnectionState) error {
-				if len(state.PeerCertificates) == 0 {
-					return errors.New("Starcat did not provide a TLS certificate")
-				}
-				digest := sha256.Sum256(state.PeerCertificates[0].Raw)
-				actual := hex.EncodeToString(digest[:])
-				if actual != expected {
-					return fmt.Errorf("%w: expected=%s actual=%s; verify the intended Starcat App, then generate a new pairing URI in Settings and re-pair with `starcat pair`", ErrCertificateMismatch, expected, actual)
-				}
-				return nil
-			},
-		}
+	transport.Proxy = nil
+	return &http.Client{
+		Transport: transport,
+		Timeout:   timeout,
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
 	}
-	return &http.Client{Transport: &loopbackFallbackTransport{transport: transport}, Timeout: timeout}, nil
-}
-
-// loopbackFallbackTransport 只在目标主机的 DNS 解析失败时尝试同端口的 IPv4 loopback。
-// DNS 失败发生在请求发送前，因此可以安全重建 body；HTTP/TLS 错误和连接超时不重试，
-// 避免重复兑换一次性 secret 或重放业务写入。两次连接共用 TLS 1.3 和同一证书 pin，
-// 所以另一台本机服务不能取得配对 secret 或长期 token，也不会发生 HTTP 降级。
-type loopbackFallbackTransport struct {
-	transport *http.Transport
-}
-
-func (t *loopbackFallbackTransport) RoundTrip(request *http.Request) (*http.Response, error) {
-	response, err := t.transport.RoundTrip(request)
-	var dnsError *net.DNSError
-	host := request.URL.Hostname()
-	if err == nil || request.Context().Err() != nil || request.URL.Scheme != "https" ||
-		!errors.As(err, &dnsError) || !strings.EqualFold(strings.TrimSuffix(dnsError.Name, "."), strings.TrimSuffix(host, ".")) ||
-		strings.EqualFold(host, "localhost") || net.ParseIP(host) != nil {
-		return response, err
-	}
-	// Transport 会关闭失败请求的 body；只允许有 GetBody 的请求进入兜底。
-	if request.Body != nil && request.GetBody == nil {
-		return nil, err
-	}
-	fallback := request.Clone(request.Context())
-	fallback.URL.Host = "127.0.0.1"
-	if port := request.URL.Port(); port != "" {
-		fallback.URL.Host = net.JoinHostPort("127.0.0.1", port)
-	}
-	fallback.Host = fallback.URL.Host
-	if request.Body != nil {
-		fallback.Body, err = request.GetBody()
-		if err != nil {
-			return nil, fmt.Errorf("prepare Starcat local fallback: %w", err)
-		}
-	}
-	response, fallbackError := t.transport.RoundTrip(fallback)
-	if fallbackError != nil {
-		return nil, fmt.Errorf("Starcat endpoint host %s could not be resolved: %w; local fallback %s also failed: %w; check the App's MCP service and generate a new pairing URI", host, dnsError, fallback.URL.Host, fallbackError)
-	}
-	return response, nil
-}
-
-func (t *loopbackFallbackTransport) CloseIdleConnections() {
-	t.transport.CloseIdleConnections()
 }
 
 func NewHTTPTransport(profile config.Profile, token string) (*HTTPTransport, error) {
 	if err := profile.Validate(); err != nil {
 		return nil, err
 	}
-	client, err := NewHTTPClient(profile.Endpoint, profile.CertificateSHA256, 30*time.Second)
-	if err != nil {
-		return nil, err
+	if _, legacy := profile.HTTPVersion(); legacy {
+		return nil, errors.New("Starcat MCP transport requires an HTTP endpoint")
 	}
-	return &HTTPTransport{endpoint: profile.Endpoint, token: token, client: client}, nil
+	return &HTTPTransport{endpoint: profile.Endpoint, token: token, client: NewHTTPClient(30 * time.Second)}, nil
 }
 
 // Send 原样转发一个 JSON-RPC 消息。它同时服务 MCP stdio bridge 和高层 tool client。
@@ -157,9 +86,6 @@ func (t *HTTPTransport) Send(ctx context.Context, body []byte) (int, []byte, err
 
 	response, err := t.client.Do(request)
 	if err != nil {
-		if errors.Is(err, ErrCertificateMismatch) {
-			return 0, nil, err
-		}
 		if errors.Is(err, context.DeadlineExceeded) {
 			return 0, nil, fmt.Errorf("connect to Starcat: %w", err)
 		}
@@ -371,10 +297,6 @@ func toolErrorMessage(result map[string]any) string {
 		}
 	}
 	return "Starcat MCP tool call failed"
-}
-
-func normalizeFingerprint(value string) string {
-	return strings.ToLower(strings.ReplaceAll(strings.TrimSpace(value), ":", ""))
 }
 
 // Version 在构建发布产物时由 -ldflags 覆盖。

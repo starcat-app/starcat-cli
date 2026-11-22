@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/starcat-app/starcat-cli/internal/config"
 	"github.com/starcat-app/starcat-cli/internal/credential"
@@ -110,7 +111,7 @@ func (r *Runner) Run(ctx context.Context, args []string) error {
 		if len(args) != 1 {
 			return errors.New("Usage: starcat mcp")
 		}
-		transport, err := r.loadTransport()
+		transport, _, err := r.loadTransport(ctx)
 		if err != nil {
 			return err
 		}
@@ -184,7 +185,7 @@ func classifyGlobalSearchError(err error) error {
 	switch {
 	case errors.Is(err, config.ErrNotPaired):
 		code = "CLI_NOT_PAIRED"
-	case errors.Is(err, mcp.ErrUnauthorized), errors.Is(err, mcp.ErrCertificateMismatch):
+	case errors.Is(err, mcp.ErrUnauthorized):
 		code = "CLI_NOT_PAIRED"
 	case errors.Is(err, context.DeadlineExceeded):
 		code = "SEARCH_TIMEOUT"
@@ -466,14 +467,11 @@ func (r *Runner) runTag(ctx context.Context, args []string) error {
 }
 
 func (r *Runner) doctor(ctx context.Context) error {
-	profile, err := r.Profiles.Load()
+	transport, profile, err := r.loadTransport(ctx)
 	if err != nil {
 		return err
 	}
-	client, err := r.loadClient()
-	if err != nil {
-		return err
-	}
+	client := mcp.NewClient(transport)
 	tools, err := client.ListTools(ctx)
 	if err != nil {
 		return err
@@ -481,13 +479,8 @@ func (r *Runner) doctor(ctx context.Context) error {
 	if _, err := client.CallTool(ctx, "starcat.get_capabilities", map[string]any{}); err != nil {
 		return err
 	}
-	tlsStatus := "✓ Local loopback connection"
-	if strings.HasPrefix(profile.Endpoint, "https://") {
-		tlsStatus = "✓ TLS certificate fingerprint verified"
-	}
 	return r.writeText(fmt.Sprintf(
-		"Starcat Doctor\n\n✓ Pairing profile found\n%s\n✓ MCP connection healthy\n✓ Available tools: %d\n✓ Capabilities loaded\n\nCLI version: %s\nApp version: %s\nProtocol version: %s\nEndpoint: %s",
-		tlsStatus,
+		"Starcat Doctor\n\n✓ Pairing profile found\n✓ MCP HTTP connection healthy\n✓ Available tools: %d\n✓ Capabilities loaded\n\nCLI version: %s\nApp version at pairing: %s\nProtocol version: %s\nEndpoint: %s",
 		len(tools),
 		mcp.Version,
 		profile.AppVersion,
@@ -513,7 +506,7 @@ func (r *Runner) unpair() error {
 }
 
 func (r *Runner) call(ctx context.Context, tool string, arguments map[string]any) error {
-	client, err := r.loadClient()
+	client, err := r.loadClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -544,7 +537,7 @@ func (r *Runner) callClient(ctx context.Context, client *mcp.Client, tool string
 
 // writeClient 使用公开的 capabilities Tool 作为唯一权限事实源，不在 CLI 复制 App 设置状态。
 func (r *Runner) writeClient(ctx context.Context, capability string) (*mcp.Client, error) {
-	client, err := r.loadClient()
+	client, err := r.loadClient(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -566,24 +559,57 @@ func (r *Runner) writeClient(ctx context.Context, capability string) (*mcp.Clien
 	return nil, errors.New("writing is disabled; open Starcat > Settings > Extensions & Connections > MCP Service, enable Allow Writes, and try again")
 }
 
-func (r *Runner) loadClient() (*mcp.Client, error) {
-	transport, err := r.loadTransport()
+func (r *Runner) loadClient(ctx context.Context) (*mcp.Client, error) {
+	transport, _, err := r.loadTransport(ctx)
 	if err != nil {
 		return nil, err
 	}
 	return mcp.NewClient(transport), nil
 }
 
-func (r *Runner) loadTransport() (*mcp.HTTPTransport, error) {
+func (r *Runner) loadTransport(ctx context.Context) (*mcp.HTTPTransport, config.Profile, error) {
 	profile, err := r.Profiles.Load()
 	if err != nil {
-		return nil, err
+		return nil, config.Profile{}, err
+	}
+	if err := profile.Validate(); err != nil {
+		return nil, config.Profile{}, err
 	}
 	token, err := r.Credentials.Get(profile.DeviceID)
 	if err != nil {
-		return nil, err
+		return nil, config.Profile{}, err
 	}
-	return mcp.NewHTTPTransport(profile, token)
+	profile, migrationNeeded := profile.HTTPVersion()
+	transport, err := mcp.NewHTTPTransport(profile, token)
+	if err != nil {
+		return nil, config.Profile{}, err
+	}
+	if migrationNeeded {
+		if err := r.confirmHTTPMigration(ctx, profile, transport); err != nil {
+			return nil, config.Profile{}, err
+		}
+	}
+	return transport, profile, nil
+}
+
+// confirmHTTPMigration 先用现有凭据读能力，再保存地址，避免旧记录在 App 未升级时失效。
+func (r *Runner) confirmHTTPMigration(ctx context.Context, profile config.Profile, transport *mcp.HTTPTransport) error {
+	probeContext, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	client := mcp.NewClient(transport)
+	capabilities, err := client.CallTool(probeContext, "starcat.get_capabilities", map[string]any{})
+	if err == nil {
+		if value, ok := capabilities.(map[string]any); !ok || value["read"] != true {
+			err = errors.New("Starcat did not return its read capability")
+		}
+	}
+	if err != nil {
+		return fmt.Errorf("could not migrate the saved endpoint to %s: %w; check the updated Starcat MCP service or copy a new pairing command", profile.Endpoint, err)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return r.Profiles.Save(profile)
 }
 
 func (r *Runner) writeJSON(value any) error {

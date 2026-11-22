@@ -1,7 +1,9 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -17,14 +19,44 @@ func TestProfileValidateAllowsLoopbackHTTP(t *testing.T) {
 	}
 }
 
-func TestProfileValidateRejectsRemoteHTTP(t *testing.T) {
+func TestProfileValidateAllowsRemoteHTTP(t *testing.T) {
 	profile := Profile{
 		Endpoint:        "http://192.168.1.10:5551/mcp",
 		DeviceID:        "device-1",
 		ProtocolVersion: CurrentProtocolVersion,
 	}
-	if err := profile.Validate(); err == nil {
-		t.Fatal("Validate() should reject plaintext remote endpoint")
+	if err := profile.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
+func TestLegacyProfileDropsCertificateAfterHTTPSchemeMigration(t *testing.T) {
+	store := FileStore{Path: filepath.Join(t.TempDir(), "profile.json")}
+	payload := `{"endpoint":"https://mac.local:5555/mcp","certificate_sha256":"old","device_id":"device-1","app_version":"2.0.0","protocol_version":"1","paired_at":"2026-11-22T00:00:00Z"}`
+	if err := os.WriteFile(store.Path, []byte(payload), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	original, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	migrated, changed := original.HTTPVersion()
+	if want := "http://mac.local:5555/mcp"; !changed || migrated.Endpoint != want {
+		t.Fatalf("HTTPVersion() = %#v, %v, want %s", migrated, changed, want)
+	}
+	original.Endpoint = migrated.Endpoint
+	if original != migrated {
+		t.Fatalf("HTTPVersion() changed pairing data: %#v", migrated)
+	}
+	if err := store.Save(migrated); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := os.ReadFile(store.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(saved), "certificate_sha256") {
+		t.Fatal("saved profile still contains a certificate fingerprint")
 	}
 }
 

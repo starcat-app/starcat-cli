@@ -3,7 +3,6 @@
 package config
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,7 +10,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -21,40 +19,41 @@ var ErrNotPaired = errors.New("Starcat CLI is not paired; run `starcat pair`")
 
 // Profile 是 CLI 与一台 Starcat App 建立连接所需的非敏感资料。
 type Profile struct {
-	Endpoint          string    `json:"endpoint"`
-	CertificateSHA256 string    `json:"certificate_sha256,omitempty"`
-	DeviceID          string    `json:"device_id"`
-	AppVersion        string    `json:"app_version"`
-	ProtocolVersion   string    `json:"protocol_version"`
-	PairedAt          time.Time `json:"paired_at"`
+	Endpoint        string    `json:"endpoint"`
+	DeviceID        string    `json:"device_id"`
+	AppVersion      string    `json:"app_version"`
+	ProtocolVersion string    `json:"protocol_version"`
+	PairedAt        time.Time `json:"paired_at"`
 }
 
-// Validate 确保 CLI 不会把凭据发送到明文远程地址，也拒绝协议版本漂移。
+// Validate 允许读取旧 HTTPS profile，以便在连接成功后迁移。
 func (p Profile) Validate() error {
 	if p.ProtocolVersion != CurrentProtocolVersion {
 		return fmt.Errorf("CLI/App protocol mismatch: CLI=%s, Starcat=%s", CurrentProtocolVersion, p.ProtocolVersion)
 	}
 	u, err := url.Parse(p.Endpoint)
-	if err != nil || u.Hostname() == "" || u.Path != "/mcp" {
+	if err != nil || u.Hostname() == "" || u.EscapedPath() != "/mcp" ||
+		u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
 		return errors.New("invalid Starcat endpoint: path must be /mcp")
 	}
-	switch u.Scheme {
-	case "https":
-		fingerprint := normalizeFingerprint(p.CertificateSHA256)
-		if len(fingerprint) != 64 {
-			return errors.New("remote HTTPS endpoint requires a valid SHA-256 certificate fingerprint")
-		}
-		if _, err := hex.DecodeString(fingerprint); err != nil {
-			return errors.New("remote HTTPS endpoint certificate fingerprint is not valid hexadecimal")
-		}
-	case "http":
-		if !isLoopbackHost(u.Hostname()) {
-			return errors.New("plaintext HTTP is only allowed for loopback addresses")
-		}
-	default:
+	if u.Scheme != "http" && u.Scheme != "https" {
 		return errors.New("Starcat endpoint must use http or https")
 	}
 	return nil
+}
+
+// HTTPVersion 保留已配对的设备身份与连接端口，只迁移 URL scheme。
+func (p Profile) HTTPVersion() (Profile, bool) {
+	endpoint, err := url.Parse(p.Endpoint)
+	if err != nil || endpoint.Scheme != "https" {
+		return p, false
+	}
+	if endpoint.Port() == "" {
+		endpoint.Host = net.JoinHostPort(endpoint.Hostname(), "443")
+	}
+	endpoint.Scheme = "http"
+	p.Endpoint = endpoint.String()
+	return p, true
 }
 
 // Store 抽象 profile 持久化，便于命令测试替换为内存实现。
@@ -106,33 +105,26 @@ func (s FileStore) Save(profile Profile) error {
 	if err != nil {
 		return fmt.Errorf("encode connection profile: %w", err)
 	}
-	temporary := s.Path + ".tmp"
-	if err := os.WriteFile(temporary, append(data, '\n'), 0o600); err != nil {
+	// CLI 与 MCP 可以同时迁移同一 profile，各自使用独立的临时文件再原子替换。
+	temporary, err := os.CreateTemp(filepath.Dir(s.Path), ".profile-*.tmp")
+	if err != nil {
+		return fmt.Errorf("create temporary connection profile: %w", err)
+	}
+	defer os.Remove(temporary.Name())
+	_, writeErr := temporary.Write(append(data, '\n'))
+	closeErr := temporary.Close()
+	if err := errors.Join(writeErr, closeErr); err != nil {
 		return fmt.Errorf("write temporary connection profile: %w", err)
 	}
-	if err := os.Rename(temporary, s.Path); err != nil {
-		_ = os.Remove(temporary)
+	if err := os.Rename(temporary.Name(), s.Path); err != nil {
 		return fmt.Errorf("save connection profile: %w", err)
 	}
 	return nil
 }
-
 func (s FileStore) Delete() error {
 	err := os.Remove(s.Path)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 	return err
-}
-
-func isLoopbackHost(host string) bool {
-	if strings.EqualFold(host, "localhost") {
-		return true
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
-}
-
-func normalizeFingerprint(value string) string {
-	return strings.ToLower(strings.ReplaceAll(strings.TrimSpace(value), ":", ""))
 }
