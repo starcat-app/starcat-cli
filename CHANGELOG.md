@@ -6,6 +6,11 @@ The project follows Semantic Versioning. GitHub Releases are the source of publi
 
 ## Unreleased
 
+## v3.0.0 - 2026-11-23
+
+- **Breaking:** CLI v3 connects to the Starcat app over HTTP. Pairing now requires an HTTP-enabled app; upgrade the App and CLI together for remote connections. Run `starcat doctor` to verify an existing pairing and migrate a saved HTTPS address with its device token.
+- Added cross-device pairing: enable **Allow Other Devices** in the app to pair from another device over the Mac's network addresses.
+
 ## v2.0.0 - 2026-11-19
 
 - **Breaking:** Dedicated write commands preview changes by default and require `--apply` to persist them. Update scripts that expect these commands to write immediately.
